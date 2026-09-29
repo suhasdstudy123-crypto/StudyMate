@@ -1,7 +1,17 @@
 # StudyMate
 
-Coursework knowledge management app: Next.js frontend, PostgreSQL + pgvector,
-JWT auth (Student/Admin roles). Level 3 DBMS course project.
+An AI-powered study assistant: students upload study material and ask questions
+answered via Retrieval-Augmented Generation (RAG). See Phase.md in this repo for
+the full team plan, architecture, and phase-by-phase checklist.
+
+Stack:
+- frontend/ = Next.js (TypeScript, Tailwind, App Router, src/ directory)
+- backend/  = FastAPI (Python) — auth, courses, materials, PDF processing,
+              embeddings, vector search, RAG pipeline, LLM integration, chat
+- database/ = PostgreSQL + pgvector (schema.sql, seed.sql)
+
+The frontend NEVER talks to PostgreSQL directly. All data flows through the
+FastAPI backend: Next.js -> FastAPI -> PostgreSQL.
 
 ## Role
 You are the implementer. Architecture, design decisions, and teaching happen
@@ -18,9 +28,9 @@ elsewhere. I will give you a specific implementation brief for each step.
 - Don't run git commit or git push. List the files changed and suggest a commit message.
 - If an error occurs, report the exact error and the likely cause before fixing it.
 
-## Layout
-- frontend/ = Next.js app (TypeScript, Tailwind, App Router, src/ directory)
-- Planned siblings: database/ (SQL), ml-service/ (Python embeddings, later)
-
 ## Current status
-Phase 1: Next.js scaffold created in frontend/ (not yet committed).
+Frontend: Phase 0 done and merged to main (placeholder routes + nav for
+login, register, dashboard, courses, materials, chat).
+Backend: starting Phase 0 (Python env, FastAPI, /health endpoint) on branch
+feature/backend-setup. This is now a solo effort — teammate's branch exists
+separately and is not currently being integrated.
