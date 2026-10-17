@@ -14,7 +14,7 @@ these rules gets a 422 error before our route code even runs.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class ORMSchema(BaseModel):
@@ -23,8 +23,46 @@ class ORMSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+def _normalize_email(value: str) -> str:
+    # Matches the users_email_lowercase CHECK in schema.sql.
+    return value.strip().lower()
+
+
 # ------------------------------------------------------------------
-# Users (registration/login schemas arrive with auth in Stage 3)
+# Auth
+# ------------------------------------------------------------------
+
+class RegisterRequest(BaseModel):
+    # There is deliberately NO "role" field: a client must never be able
+    # to register itself as admin. Every new account is a student.
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr  # format checked by the email-validator package
+    # 8 = minimum sensible length; 128 = cap so nobody can send a 10 MB
+    # "password" and make the server spend seconds hashing it.
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Name cannot be blank")
+        return value
+
+    # The password is intentionally NOT stripped: "pass word " is
+    # exactly what the user typed and must be hashed as-is.
+    normalize_email = field_validator("email")(_normalize_email)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+    normalize_email = field_validator("email")(_normalize_email)
+
+
+# ------------------------------------------------------------------
+# Users
 # ------------------------------------------------------------------
 
 class UserResponse(ORMSchema):
@@ -36,14 +74,20 @@ class UserResponse(ORMSchema):
     created_at: datetime
 
 
+class AuthResponse(BaseModel):
+    # Returned by register/login. The browser ignores access_token
+    # (it uses the httpOnly cookie); API clients and /docs use it.
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
 # ------------------------------------------------------------------
 # Courses
 # ------------------------------------------------------------------
 
 class CourseCreate(BaseModel):
-    # NOTE: user_id is still sent by the client until Stage 3.
-    # After auth, it comes from the logged-in user's token instead.
-    user_id: UUID
+    # No user_id: the owner is always the logged-in user (from the token).
     name: str = Field(min_length=1, max_length=150)
     code: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=2000)
