@@ -1,122 +1,103 @@
+"""
+Pydantic schemas: the shapes of JSON going IN to and OUT of the API.
+
+Models (models.py) describe database rows.
+Schemas (this file) describe what the API accepts and returns.
+Keeping them separate is a security boundary: e.g. UserResponse has no
+password_hash field, so the hash can never leak into a response even if
+a route returns a full User object.
+
+Pydantic validates incoming JSON automatically: a request that breaks
+these rules gets a 422 error before our route code even runs.
+"""
+
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class UserCreate(BaseModel):
-    name: str
-    email: str
-    password: str
-
-
-class UserResponse(BaseModel):
+class ORMSchema(BaseModel):
+    # from_attributes=True lets Pydantic read SQLAlchemy objects
+    # (user.name) and not only dicts (user["name"]).
     model_config = ConfigDict(from_attributes=True)
 
+
+# ------------------------------------------------------------------
+# Users (registration/login schemas arrive with auth in Stage 3)
+# ------------------------------------------------------------------
+
+class UserResponse(ORMSchema):
     id: UUID
     name: str
     email: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    role: str
+    is_active: bool
+    created_at: datetime
+
+
+# ------------------------------------------------------------------
+# Courses
+# ------------------------------------------------------------------
 
 class CourseCreate(BaseModel):
+    # NOTE: user_id is still sent by the client until Stage 3.
+    # After auth, it comes from the logged-in user's token instead.
     user_id: UUID
-    name: str
-    code: str | None = None
-    description: str | None = None
+    name: str = Field(min_length=1, max_length=150)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=2000)
 
 
 class CourseUpdate(BaseModel):
-    name: str | None = None
-    code: str | None = None
-    description: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=2000)
 
 
-class CourseResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class CourseResponse(ORMSchema):
     id: UUID
     user_id: UUID
     name: str
-    code: str | None = None
-    description: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-class MaterialCreate(BaseModel):
-    course_id: UUID
-    title: str
-    file_name: str
-    file_path: str
-    file_type: str | None = None
-    file_size: int | None = None
+    code: str | None
+    description: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
-class MaterialResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+# ------------------------------------------------------------------
+# Materials (created by the upload endpoint in Stage 5)
+# ------------------------------------------------------------------
 
+class MaterialResponse(ORMSchema):
     id: UUID
     course_id: UUID
     title: str
-    file_name: str
-    file_path: str
-    file_type: str | None = None
-    file_size: int | None = None
-    processing_status: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-class ChatSessionCreate(BaseModel):
-    user_id: UUID
-    course_id: UUID | None = None
-    title: str | None = None
+    original_filename: str
+    mime_type: str
+    file_size: int
+    page_count: int | None
+    status: str
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    # stored_path and content_hash are internal details: not exposed.
 
 
-class ChatSessionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+# ------------------------------------------------------------------
+# Chat (the RAG chat endpoint arrives in Stage 7)
+# ------------------------------------------------------------------
 
+class ChatSessionResponse(ORMSchema):
     id: UUID
-    user_id: UUID
-    course_id: UUID | None = None
-    title: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    course_id: UUID | None
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
 
-class ChatMessageCreate(BaseModel):
-    session_id: UUID
+
+class ChatMessageResponse(ORMSchema):
+    id: UUID
     role: str
     content: str
-
-
-class ChatMessageResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    session_id: UUID
-    role: str
-    content: str
-    created_at: datetime | None = None
-
-class MessageSourceCreate(BaseModel):
-    message_id: UUID
-    chunk_id: UUID
-    similarity_score: float | None = None
-    source_order: int | None = None
-
-
-class MessageSourceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    message_id: UUID
-    chunk_id: UUID
-    similarity_score: float | None = None
-    source_order: int | None = None
-
-class MaterialUpdate(BaseModel):
-    course_id: UUID | None = None
-    title: str | None = None
-    file_name: str | None = None
-    file_path: str | None = None
-    file_type: str | None = None
-    file_size: int | None = None
+    created_at: datetime
