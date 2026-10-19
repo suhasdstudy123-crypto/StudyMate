@@ -6,6 +6,7 @@ import "@fontsource-variable/schibsted-grotesk";
 import "@fontsource-variable/source-serif-4";
 import "./globals.css";
 
+import { AuthProvider } from "@/components/auth/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
@@ -24,7 +25,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // purpose here. This tells React not to warn about that one attribute.
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-dvh">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {/* AuthProvider: every page can ask "who is logged in?" via useAuth() */}
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

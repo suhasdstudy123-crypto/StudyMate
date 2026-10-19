@@ -1,30 +1,57 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
 /*
   Marky, StudyMate's mascot. Pure SVG + a little JavaScript:
     * eyes follow the mouse pointer (pointermove -> move the pupils)
+    * or look in a fixed direction when `gaze` is given (e.g. at the form)
     * blinks at random intervals
-    * moods change the face: idle, happy (^ ^), confused, wave
+    * moods change the pose: idle, happy, confused, wave,
+      shy (hands over eyes) and peek (one hand lowered)
   Everything that touches `window` runs inside useEffect, which only runs
   in the browser, so server and browser render the same first HTML.
 */
 
-export type MascotMood = "idle" | "happy" | "confused" | "wave";
+export type MascotMood = "idle" | "happy" | "confused" | "wave" | "shy" | "peek";
 
 const VIEW_W = 200; // SVG coordinate width; used to convert screen pixels
 const EYE_Y = 96;   // eye centre height in SVG coordinates
 
-export function Mascot({ mood = "idle", className }: { mood?: MascotMood; className?: string }) {
+type Props = {
+  mood?: MascotMood;
+  /** Fixed look direction, each value -1..1 (x: left/right, y: up/down). */
+  gaze?: [number, number] | null;
+  className?: string;
+};
+
+export function Mascot({ mood = "idle", gaze = null, className }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const faceRef = useRef<SVGGElement>(null);
   const pupilRefs = useRef<(SVGGElement | null)[]>([]);
+  const gazeRef = useRef(gaze);
   const [blinking, setBlinking] = useState(false);
   const reduceMotion = useReducedMotion();
+
+  // Move pupils (and the whole face a little) toward direction (ux, uy).
+  // We set the SVG transform directly instead of using React state:
+  // pointermove fires ~60 times a second, and re-rendering React that
+  // often for two circles would be wasted work.
+  const look = useCallback((ux: number, uy: number) => {
+    pupilRefs.current.forEach((p) => p?.setAttribute("transform", `translate(${ux * 6} ${uy * 6})`));
+    faceRef.current?.setAttribute("transform", `translate(${ux * 4} ${uy * 3})`);
+  }, []);
+
+  // ---- A fixed gaze (e.g. "read the email field") wins over the pointer ----
+  const gx = gaze?.[0];
+  const gy = gaze?.[1];
+  useEffect(() => {
+    gazeRef.current = gx === undefined || gy === undefined ? null : [gx, gy];
+    if (gx !== undefined && gy !== undefined) look(gx, gy);
+  }, [gx, gy, look]);
 
   // ---- Eyes follow the pointer ----------------------------------------
   useEffect(() => {
@@ -36,7 +63,7 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
     function update() {
       frame = 0;
       const svg = svgRef.current;
-      if (!svg) return;
+      if (!svg || gazeRef.current) return;
       const box = svg.getBoundingClientRect();
       const scale = box.width / VIEW_W;
       // Where Marky's eyes are on the screen, in pixels
@@ -47,14 +74,7 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
       const dist = Math.hypot(dx, dy) || 1;
       // Unit direction, scaled down when the pointer is close to the face
       const pull = Math.min(dist / (180 * scale), 1);
-      const ux = (dx / dist) * pull;
-      const uy = (dy / dist) * pull;
-
-      // Set the SVG transform directly instead of using React state:
-      // pointermove fires ~60 times a second, and re-rendering React that
-      // often for two circles would be wasted work.
-      pupilRefs.current.forEach((p) => p?.setAttribute("transform", `translate(${ux * 6} ${uy * 6})`));
-      faceRef.current?.setAttribute("transform", `translate(${ux * 4} ${uy * 3})`);
+      look((dx / dist) * pull, (dy / dist) * pull);
     }
 
     function onMove(e: PointerEvent) {
@@ -69,7 +89,7 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
       window.removeEventListener("pointermove", onMove);
       cancelAnimationFrame(frame);
     };
-  }, [reduceMotion]);
+  }, [reduceMotion, look]);
 
   // ---- Random blinking -------------------------------------------------
   useEffect(() => {
@@ -89,6 +109,8 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
   }, [reduceMotion]);
 
   const eyesClosedHappy = mood === "happy" || mood === "wave";
+  const coverLeft = mood === "shy" || mood === "peek";
+  const coverRight = mood === "shy";
 
   return (
     <svg
@@ -111,17 +133,21 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
         <rect x="21" y="82" width="15" height="36" rx="7.5" className="fill-primary stroke-foreground" strokeWidth="4" />
         <rect x="164" y="82" width="15" height="36" rx="7.5" className="fill-primary stroke-foreground" strokeWidth="4" />
 
-        {/* arms (drawn before the body so the shoulders tuck under it) */}
-        <g className="stroke-foreground" strokeLinecap="round">
-          <line x1="70" y1="174" x2="48" y2="196" strokeWidth="10" />
-          <line x1="70" y1="174" x2="48" y2="196" strokeWidth="4" className="stroke-primary" />
+        {/* resting arms (drawn before the body so the shoulders tuck under it);
+            hidden while that hand is up covering an eye */}
+        <g style={{ opacity: coverLeft ? 0 : 1, transition: "opacity 150ms" }}>
+          <line x1="70" y1="174" x2="48" y2="196" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
+          <line x1="70" y1="174" x2="48" y2="196" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
+          <circle cx="47" cy="197" r="7" className="fill-card stroke-foreground" strokeWidth="3" />
         </g>
-        <g className={cn("bot-arm", mood === "wave" && "bot-arm-wave")}>
+        <g
+          className={cn("bot-arm", mood === "wave" && "bot-arm-wave")}
+          style={{ opacity: coverRight ? 0 : 1, transition: "opacity 150ms" }}
+        >
           <line x1="130" y1="174" x2="152" y2="196" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
           <line x1="130" y1="174" x2="152" y2="196" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
           <circle cx="153" cy="197" r="7" className="fill-card stroke-foreground" strokeWidth="3" />
         </g>
-        <circle cx="47" cy="197" r="7" className="fill-card stroke-foreground" strokeWidth="3" />
 
         {/* body with a little highlighted page on the chest */}
         <rect x="64" y="154" width="72" height="54" rx="20" className="fill-primary stroke-foreground" strokeWidth="4" />
@@ -133,8 +159,8 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
         <rect x="32" y="44" width="136" height="112" rx="38" className="fill-card stroke-foreground" strokeWidth="4" />
         <rect x="48" y="61" width="104" height="78" rx="26" fill="var(--screen)" />
 
-        {/* face: shifts slightly toward the pointer, like turning the head */}
-        <g ref={faceRef} style={{ transition: "transform 120ms ease-out" }}>
+        {/* face: shifts slightly toward where Marky looks, like turning the head */}
+        <g ref={faceRef} style={{ transition: "transform 160ms ease-out" }}>
           {eyesClosedHappy ? (
             <g fill="none" stroke="#ffffff" strokeWidth="5" strokeLinecap="round">
               <path d="M66 100 q12 -15 24 0" />
@@ -152,7 +178,7 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
                 }}
               >
                 <circle cx={cx} cy={EYE_Y} r="15" fill="#ffffff" />
-                <g ref={(el) => { pupilRefs.current[i] = el; }} style={{ transition: "transform 90ms ease-out" }}>
+                <g ref={(el) => { pupilRefs.current[i] = el; }} style={{ transition: "transform 140ms ease-out" }}>
                   <circle cx={cx} cy={EYE_Y} r="8" fill="#171f4d" />
                   <circle cx={cx - 3} cy={EYE_Y - 3} r="2.6" fill="#ffffff" />
                 </g>
@@ -169,10 +195,45 @@ export function Mascot({ mood = "idle", className }: { mood?: MascotMood; classN
             <path d="M86 123 q7 -7 14 0 t14 0" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" />
           ) : eyesClosedHappy ? (
             <path d="M86 115 q14 18 28 0 z" fill="#ff8fb1" stroke="#ffffff" strokeWidth="3.5" strokeLinejoin="round" />
+          ) : coverLeft ? (
+            <ellipse cx="100" cy="121" rx="6" ry="5" fill="#ff8fb1" stroke="#ffffff" strokeWidth="3" />
           ) : (
             <path d="M89 117 q11 11 22 0" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" />
           )}
         </g>
+
+        {/* hands over the eyes: they spring up from the shoulders */}
+        <AnimatePresence>
+          {coverLeft && (
+            <motion.g
+              key="left-hand"
+              initial={{ y: 70, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 70, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            >
+              <line x1="66" y1="170" x2="70" y2="112" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
+              <line x1="66" y1="170" x2="70" y2="112" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
+              {/* a solid mitt over the eye, same colour as the body */}
+              <ellipse cx="78" cy="96" rx="21" ry="18" className="fill-primary stroke-foreground" strokeWidth="3.5" />
+              <path d="M66 90 q4 -5 9 -6" fill="none" stroke="#ffffff" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" />
+            </motion.g>
+          )}
+          {coverRight && (
+            <motion.g
+              key="right-hand"
+              initial={{ y: 70, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 70, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 22, delay: 0.05 }}
+            >
+              <line x1="134" y1="170" x2="130" y2="112" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
+              <line x1="134" y1="170" x2="130" y2="112" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
+              <ellipse cx="122" cy="96" rx="21" ry="18" className="fill-primary stroke-foreground" strokeWidth="3.5" />
+              <path d="M110 90 q4 -5 9 -6" fill="none" stroke="#ffffff" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" />
+            </motion.g>
+          )}
+        </AnimatePresence>
       </g>
     </svg>
   );
