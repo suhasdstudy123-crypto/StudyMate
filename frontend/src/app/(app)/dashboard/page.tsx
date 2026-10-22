@@ -1,25 +1,38 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Check, FileText } from "lucide-react";
 import { motion } from "motion/react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Mascot } from "@/components/mascot";
+import { listCourses, timeAgo, type Course } from "@/lib/courses";
 import { cn } from "@/lib/utils";
 
 /*
-  The first page after logging in. For now it greets you and shows what's
-  next; Stage 4+ fills it with your real courses and recent questions.
+  The first page after logging in. It greets you, ticks off the
+  getting-started steps from REAL data (GET /api/courses), and shows your
+  most recent courses. Later stages add uploads and recent questions.
   It's a Client Component because the greeting uses YOUR clock and the
   user comes from useAuth().
 */
 
-const STEPS = [
-  { title: "Create your account", body: "You're in. Your notes stay private to you.", done: true },
-  { title: "Make your first course", body: "Group your notes by subject, like DBMS or Operating Systems.", done: false },
-  { title: "Upload a PDF", body: "Lecture notes, slides or a previous-year paper.", done: false },
-  { title: "Ask your first question", body: "Get an answer with the exact page it came from.", done: false },
-];
+function buildSteps(courses: Course[]) {
+  const hasCourse = courses.length > 0;
+  const hasFile = courses.some((c) => c.material_count > 0);
+  return [
+    { title: "Create your account", body: "You're in. Your notes stay private to you.", done: true, href: null },
+    {
+      title: "Make your first course",
+      body: "Group your notes by subject, like DBMS or Operating Systems.",
+      done: hasCourse,
+      href: "/courses",
+    },
+    { title: "Upload a PDF", body: "Lecture notes, slides or a previous-year paper.", done: hasFile, href: null },
+    { title: "Ask your first question", body: "Get an answer with the exact page it came from.", done: false, href: null },
+  ];
+}
 
 function greeting() {
   const hour = new Date().getHours();
@@ -32,6 +45,21 @@ function greeting() {
 export default function DashboardPage() {
   const { user } = useAuth();
   const firstName = user?.name.split(" ")[0] ?? "";
+  // null = still loading. If loading fails, the dashboard just shows the
+  // checklist without course data; the Courses page has the full error UI.
+  const [courses, setCourses] = useState<Course[] | null>(null);
+
+  useEffect(() => {
+    let alive = true; // ignore the answer if we left the page meanwhile
+    listCourses()
+      .then((list) => alive && setCourses(list))
+      .catch(() => alive && setCourses([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const STEPS = buildSteps(courses ?? []);
   const doneCount = STEPS.filter((s) => s.done).length;
 
   return (
@@ -42,7 +70,9 @@ export default function DashboardPage() {
             {greeting()}, {firstName}.
           </h1>
           <p className="mt-3 max-w-lg text-lg text-muted-foreground">
-            This is where your courses and questions will live. Here&apos;s what&apos;s next.
+            {courses && courses.length > 0
+              ? "Pick up where you left off, or keep setting things up."
+              : "This is where your courses and questions will live. Here's what's next."}
           </p>
         </motion.div>
         <Mascot mood="wave" className="w-24 shrink-0 sm:w-28" />
@@ -95,15 +125,71 @@ export default function DashboardPage() {
                 </h3>
                 <p className="mt-0.5 text-sm text-muted-foreground">{step.body}</p>
               </div>
-              {!step.done && i === doneCount && (
-                <span className="shrink-0 rounded-full bg-highlight px-2.5 py-1 text-xs font-bold text-highlight-foreground">
-                  Up next
-                </span>
+              {!step.done && i === doneCount && courses !== null && (
+                step.href ? (
+                  <Link
+                    href={step.href}
+                    className="shrink-0 rounded-full bg-highlight px-2.5 py-1 text-xs font-bold text-highlight-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Up next →
+                  </Link>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-highlight px-2.5 py-1 text-xs font-bold text-highlight-foreground">
+                    Up next
+                  </span>
+                )
               )}
             </motion.li>
           ))}
         </ol>
       </motion.section>
+
+      {courses && courses.length > 0 && <RecentCourses courses={courses.slice(0, 3)} total={courses.length} />}
     </div>
+  );
+}
+
+function RecentCourses({ courses, total }: { courses: Course[]; total: number }) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      aria-labelledby="recent-courses"
+    >
+      <div className="flex items-end justify-between gap-4">
+        <h2 id="recent-courses" className="text-xl font-bold">
+          Recent courses
+        </h2>
+        <Link
+          href="/courses"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {total > courses.length ? `All ${total} courses` : "Manage courses"}
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      </div>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+        {courses.map((c) => (
+          <li key={c.id}>
+            <Link
+              href="/courses"
+              className="flex h-full overflow-hidden rounded-md border bg-card outline-none transition-[transform,border-color] hover:-translate-y-0.5 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span aria-hidden="true" className="binding w-4 shrink-0 bg-primary" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1 p-4">
+                <span className="truncate font-bold">{c.name}</span>
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <FileText className="size-3.5" aria-hidden="true" />
+                  {c.material_count === 0 ? "No files yet" : `${c.material_count} ${c.material_count === 1 ? "file" : "files"}`}
+                  <span aria-hidden="true">·</span>
+                  {timeAgo(c.last_activity)}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </motion.section>
   );
 }

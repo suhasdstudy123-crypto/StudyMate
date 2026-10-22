@@ -22,6 +22,8 @@ const buttonVariants = cva(
         outline: "border border-border bg-card text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
         link: "text-primary underline-offset-4 hover:underline",
+        // Only for actions that destroy data (delete a course). Red = the margin line.
+        destructive: "bg-destructive text-white hover:bg-destructive/90 dark:text-background",
       },
       size: {
         default: "h-10 px-4 text-sm",

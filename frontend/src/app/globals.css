@@ -206,6 +206,38 @@
   50% { opacity: 0; }
 }
 
+/* ---------- App: dialogs and course notebooks ---------- */
+
+/* Dialogs pop in: a small rise + fade, so opening feels responsive. */
+.dialog-pop[open] {
+  animation: dialog-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.dialog-pop[open]::backdrop {
+  animation: backdrop-fade 180ms ease-out;
+}
+@keyframes dialog-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+}
+@keyframes backdrop-fade {
+  from { opacity: 0; }
+}
+
+/* Faint notebook lines inside a course card, 28px apart, like ruled paper */
+.ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 27px,
+    color-mix(in oklab, var(--rule) 75%, transparent) 27px 28px
+  );
+}
+
+/* The notebook's spiral binding: a column of small holes down the spine */
+.binding {
+  background-image: radial-gradient(circle at center, var(--paper) 0 3.5px, transparent 4px);
+  background-size: 100% 22px;
+  background-position: center 0;
+}
+
 /* Respect "reduce motion": nothing moves on its own */
 @media (prefers-reduced-motion: reduce) {
   .highlight-sweep,
@@ -214,7 +246,9 @@
   .bot-glow,
   .bot-arm-wave,
   .marquee,
-  .caret {
+  .caret,
+  .dialog-pop[open],
+  .dialog-pop[open]::backdrop {
     animation: none;
   }
 }

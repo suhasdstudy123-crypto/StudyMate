@@ -24,3 +24,14 @@ A running log of frontend decisions and why they were made.
 - **Open-redirect protection.** `?next=` is only followed if it's a path on our own site (`/courses`), never `//evil.com`.
 - **Client-side validation mirrors the backend rules** (email format, password 8–128) for instant feedback; the backend still validates everything again.
 - **Error mapping.** 401 → form message, 409 → "account already exists" on the email field, 422 → messages under each field, no response → "Couldn't reach StudyMate".
+
+## Stage 4 — Courses page
+
+- **`lib/courses.ts`** holds the `Course` type and one function per request (list, create, update, delete). Pages never build URLs themselves.
+- **Native `<dialog>` instead of a dialog library.** `showModal()` already gives the backdrop, Esc to close, a focus trap and focus returning to the opening button. `components/ui/dialog.tsx` only connects React's `open` prop to it. React's `autoFocus` runs before `showModal()` (while the dialog is hidden) and is lost, so the first field is marked `data-autofocus` and focused after `showModal()`.
+- **One form for create and edit** (`course-form-dialog.tsx`), so the rules can't drift apart. Client checks mirror `CourseCreate`; the backend checks again. 409 → "You already have a course with this name" on the name field.
+- **The list is updated from the server's answer** (the saved course it returns), not by reloading everything or guessing.
+- **Delete asks first and says what will be lost**, using `material_count` from the view. "Keep it" is focused by default, so pressing Enter by accident doesn't delete.
+- **Course cards are notebooks:** a ballpoint spine with binding holes, ruled lines (`.ruled`), course code as a label. Edit/delete icons appear on hover with a mouse, are always visible on touch screens (`@media (hover: hover)`), and show on keyboard focus.
+- **Data loading in an effect** sets state only when the answer arrives, with an `alive` flag to ignore late answers. "Try again" bumps a counter that re-runs the effect. (ESLint's `react-hooks/set-state-in-effect` rule flags setting state synchronously inside an effect, because that causes an extra render.)
+- **Dashboard** ticks "Make your first course" from real data and shows the 3 most recent courses.
