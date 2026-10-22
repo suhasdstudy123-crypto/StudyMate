@@ -86,27 +86,56 @@ class AuthResponse(BaseModel):
 # Courses
 # ------------------------------------------------------------------
 
+def _clean_optional(value: str | None) -> str | None:
+    # "  " or "" for an optional field means "no value": store NULL,
+    # not an empty string, so the UI can simply check "has a code?".
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _clean_name(value: str) -> str:
+    # Runs BEFORE the length check (mode="before" below), so "   " becomes ""
+    # and fails min_length=1 with a clear 422, instead of reaching the
+    # database CHECK and coming back as a confusing error.
+    return value.strip() if isinstance(value, str) else value
+
+
 class CourseCreate(BaseModel):
     # No user_id: the owner is always the logged-in user (from the token).
     name: str = Field(min_length=1, max_length=150)
     code: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=2000)
 
+    clean_name = field_validator("name", mode="before")(_clean_name)
+    clean_optional = field_validator("code", "description")(_clean_optional)
+
 
 class CourseUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=150)
+    # PATCH = partial update: send only the fields you want to change.
+    # name may be left out, but it can't be set to null (a course always
+    # has a name), so its type is str, not str | None.
+    name: str = Field(default=None, min_length=1, max_length=150)
     code: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=2000)
 
+    clean_name = field_validator("name", mode="before")(_clean_name)
+    clean_optional = field_validator("code", "description")(_clean_optional)
 
-class CourseResponse(ORMSchema):
+
+class CourseSummary(BaseModel):
+    # One course card: the course plus live counts from the
+    # course_overview VIEW in schema.sql (one row per course).
     id: UUID
-    user_id: UUID
     name: str
     code: str | None
     description: str | None
     created_at: datetime
-    updated_at: datetime
+    material_count: int
+    ready_material_count: int
+    chunk_count: int
+    last_activity: datetime
 
 
 # ------------------------------------------------------------------

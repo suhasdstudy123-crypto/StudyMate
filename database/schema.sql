@@ -88,10 +88,14 @@ CREATE TABLE courses (
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
-    -- A student can't have two courses with the same name.
-    CONSTRAINT courses_user_name_unique UNIQUE (user_id, name),
-    CONSTRAINT courses_name_not_blank   CHECK (length(trim(name)) > 0)
+    CONSTRAINT courses_name_not_blank CHECK (length(trim(name)) > 0)
 );
+
+-- A student can't have two courses with the same name, ignoring case:
+-- "DBMS" and "dbms" count as the same course. A plain UNIQUE (user_id, name)
+-- would allow both, so this is a unique index on an EXPRESSION, lower(name).
+-- (Added by migrations/001_course_names_case_insensitive.sql.)
+CREATE UNIQUE INDEX courses_user_lower_name_unique ON courses (user_id, lower(name));
 
 
 -- ============================================================
@@ -224,7 +228,7 @@ CREATE TABLE message_sources (
 -- but NOT foreign keys. Every "show me X's courses / Y's chunks"
 -- query filters on a foreign key, so each gets a B-tree index.
 -- (courses.user_id and document_chunks.material_id are already
---  covered by the leading column of their UNIQUE constraints.)
+--  covered by the leading column of their UNIQUE constraint/index.)
 -- ============================================================
 
 CREATE INDEX idx_materials_course_id      ON materials(course_id);

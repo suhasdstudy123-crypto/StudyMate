@@ -23,3 +23,12 @@ A running log of backend decisions and why they were made.
 - **401 vs 403 vs 404:** 401 = not logged in / bad token; 403 = logged in but not allowed (student on `/admin/*`); 404 for another user's course, so its existence isn't revealed.
 - **Courses take the owner from the token**, never from the request body. `/courses/user/{user_id}` was removed; `GET /courses` returns your own.
 - Settings and `.env` loading moved from `database.py` to `config.py`; the app refuses to start without `DATABASE_URL` or a `JWT_SECRET_KEY` of at least 32 characters.
+
+## Stage 4 — Courses on real data
+
+- **Course names are unique per student, ignoring case.** `UNIQUE (user_id, name)` allowed both "DBMS" and "dbms". It was replaced by a unique *expression index* `ON courses (user_id, lower(name))`. Different students can still both have "DBMS".
+- **First migration file: `database/migrations/001_course_names_case_insensitive.sql`.** `schema.sql` starts with a DEV RESET that drops every table, so it can't be re-run on a database with data. A migration changes only what's needed and keeps the data. It runs inside `BEGIN ... COMMIT`: PostgreSQL can roll back schema changes too, so a failure leaves the old constraint in place. `schema.sql` was updated too, so a fresh database ends up identical.
+- **Reading courses uses the `course_overview` VIEW with plain SQL** (`sqlalchemy.text`). Every endpoint returns a `CourseSummary` with `material_count`, `ready_material_count`, `chunk_count` and `last_activity`, so the cards show live numbers. Values are passed as **bind parameters** (`:user_id`), never pasted into the SQL string, so there's no SQL injection. Writing still goes through the ORM model.
+- **Validation bug fixed.** `{"name": "   "}` passed `min_length=1` and was then rejected by the database CHECK, which came back as a wrong "duplicate name" 409. Now names are stripped *before* validation (`mode="before"`), so blank names get a clear 422. `{"name": null}` on PATCH is also a 422. Empty code/description become `NULL`.
+- `GET /courses` is ordered by most recent activity.
+- **Known for Stage 5:** deleting a course cascades to materials/chunks in the database, but uploaded files on disk must also be removed then.

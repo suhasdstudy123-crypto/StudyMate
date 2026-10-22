@@ -13,7 +13,7 @@ from backend.app.routers.courses import router as courses_router
 app = FastAPI(
     title="StudyMate API",
     description="Backend API for StudyMate: upload study material, ask questions, get answers from your own notes.",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 app.include_router(auth_router)
