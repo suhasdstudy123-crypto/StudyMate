@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment variables (secrets)
+# Environment variables (secrets) - only .env.example is committed
 .env
 .env.local
 
@@ -9,9 +9,14 @@ node_modules/
 .next/
 out/
 
-# Python virtual environment (for later ML service)
+# Python virtual environments and caches
+venv/
 .venv/
 __pycache__/
+
+# Local AI assistant files (kept on this machine only, never pushed)
+CLAUDE.md
+.claude/
 
 # OS/editor junk
 .DS_Store
