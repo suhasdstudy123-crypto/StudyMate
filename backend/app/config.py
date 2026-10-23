@@ -69,3 +69,8 @@ MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "500"))
 
 # How many PDFs are read at the same time (each uses one CPU core).
 PROCESSING_WORKERS = int(os.getenv("PROCESSING_WORKERS", "2"))
+
+# Page pictures (Stage 5b): pages the image reader reads are saved as PNG,
+# this many pixels on the long side. 2000 px keeps the small text in
+# terminal screenshots sharp (about 210 KB per slide).
+PAGE_IMAGE_LONG_SIDE = int(os.getenv("PAGE_IMAGE_LONG_SIDE", "2000"))

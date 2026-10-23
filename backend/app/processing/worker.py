@@ -39,7 +39,8 @@ from backend.app.database import SessionLocal
 from backend.app.models import DocumentChunk, DocumentPage, Material
 from backend.app.processing.chunking import chunk_page
 from backend.app.processing.extract import analyse_document, extract_page, is_heading
-from backend.app.storage import absolute_path
+from backend.app.processing.render import render_page_png
+from backend.app.storage import absolute_path, page_image_path, save_bytes
 
 log = logging.getLogger("studymate.processing")
 
@@ -59,6 +60,19 @@ def requeue_unfinished() -> int:
         ids = db.execute(text("SELECT id FROM materials WHERE status = 'pending' ORDER BY created_at")).scalars().all()
     for material_id in ids:
         enqueue(material_id)
+
+    # Pages waiting for the image reader whose picture isn't saved yet
+    # (files read before Stage 5b, or a crash right after the text pass).
+    with SessionLocal() as db:
+        missing = db.execute(text(
+            "SELECT DISTINCT p.material_id FROM document_pages p "
+            "JOIN materials m ON m.id = p.material_id "
+            "WHERE m.status = 'ready' AND p.vision_status = 'pending' AND p.image_path IS NULL"
+        )).scalars().all()
+    for material_id in missing:
+        _executor.submit(save_page_images, material_id)
+    if missing:
+        log.info("Saving missing page pictures for %d file(s)", len(missing))
     return len(ids)
 
 
@@ -79,17 +93,18 @@ def process_material(material_id: UUID) -> None:
         claimed = progress.execute(
             text(
                 "UPDATE materials SET status = 'processing', pages_processed = 0, error_message = NULL "
-                "WHERE id = :id AND status = 'pending' RETURNING stored_path"
+                "WHERE id = :id AND status = 'pending' RETURNING stored_path, processing_mode"
             ),
             {"id": material_id},
-        ).scalar_one_or_none()
+        ).first()
         progress.commit()
         if claimed is None:
             return
+        stored_path, mode = claimed
 
         # Read the bytes into memory and close the file at once, so a
         # Windows "file is in use" lock can't block deleting it later.
-        data = absolute_path(claimed).read_bytes()
+        data = absolute_path(stored_path).read_bytes()
         doc = pymupdf.open(stream=data, filetype="pdf")
 
         # ---- 2. Clean slate (matters on a retry) ------------------------
@@ -115,6 +130,9 @@ def process_material(material_id: UUID) -> None:
                     drawing_count=content.drawing_count,
                     math_symbol_count=content.math_symbol_count,
                     needs_vision=content.needs_vision,
+                    # Queue the page for the image reader: in Smart mode only
+                    # pages with pictures, in Thorough mode every page.
+                    vision_status="pending" if (mode == "thorough" or content.needs_vision) else "none",
                 )
             )
             if chunks:
@@ -149,6 +167,11 @@ def process_material(material_id: UUID) -> None:
         work.commit()
         log.info("Processed material %s: %d pages, %d chunks", material_id, doc.page_count, chunk_index)
 
+        # The text is searchable now. Pictures come after, OUTSIDE the
+        # transaction above: a picture that fails to save must not undo
+        # a correctly read file. (It is retried on the next start.)
+        save_page_images(material_id, doc)
+
     except Exception:
         log.exception("Processing failed for material %s (page %s)", material_id, current_page)
         work.rollback()      # undo every page/chunk inserted so far
@@ -172,3 +195,46 @@ def process_material(material_id: UUID) -> None:
     finally:
         work.close()
         progress.close()
+
+
+def save_page_images(material_id: UUID, doc: pymupdf.Document | None = None) -> None:
+    """Save a picture of every page that waits for the image reader.
+
+    The pictures are what the image reader is sent, and what a citation
+    shows later. Each picture is committed on its own, so the viewer can
+    show them one by one, and a failure on page 7 keeps pages 1-6.
+    Safe to run twice: pages that already have a picture are skipped, and
+    a re-saved picture simply replaces the same file."""
+    with SessionLocal() as db:
+        stored_path = db.execute(
+            text("SELECT stored_path FROM materials WHERE id = :id"), {"id": material_id}
+        ).scalar_one_or_none()
+        if stored_path is None:
+            return  # the file was deleted meanwhile
+        pages = db.execute(
+            text(
+                "SELECT page_number FROM document_pages "
+                "WHERE material_id = :id AND vision_status IN ('pending', 'processing') "
+                "AND image_path IS NULL ORDER BY page_number"
+            ),
+            {"id": material_id},
+        ).scalars().all()
+        if not pages:
+            return
+        try:
+            if doc is None:
+                doc = pymupdf.open(stream=absolute_path(stored_path).read_bytes(), filetype="pdf")
+            for number in pages:
+                rel = page_image_path(stored_path, number)
+                save_bytes(rel, render_page_png(doc[number - 1]))
+                db.execute(
+                    update(DocumentPage)
+                    .where(DocumentPage.material_id == material_id, DocumentPage.page_number == number)
+                    .values(image_path=rel)
+                )
+                db.commit()
+            log.info("Saved %d page pictures for material %s", len(pages), material_id)
+        except Exception:
+            # Not fatal: the text is already searchable. Logged, retried on next start.
+            db.rollback()
+            log.exception("Could not save page pictures for material %s", material_id)

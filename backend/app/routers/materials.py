@@ -7,6 +7,7 @@ Materials = uploaded PDFs inside a course.
   GET    /materials/{id}/file                  the PDF itself, to view it
   GET    /materials/{id}/pages                 what was found on each page
   GET    /materials/{id}/pages/{n}             the chunks of page n
+  GET    /materials/{id}/pages/{n}/image       the page's picture (pages the image reader reads)
   PATCH  /materials/{id}                       rename (title)
   POST   /materials/{id}/retry                 try a failed file again
   DELETE /materials/{id}                       delete file + its chunks
@@ -17,10 +18,11 @@ user_id = the logged-in user, and someone else's file is a 404.
 
 import logging
 from pathlib import PureWindowsPath
+from typing import Literal
 from uuid import UUID, uuid4
 
 import pymupdf
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -36,7 +38,7 @@ from backend.app.schemas import ChunkResponse, MaterialSummary, MaterialUpdate, 
 from backend.app.storage import (
     FileTooLarge,
     absolute_path,
-    delete_files,
+    delete_material_files,
     move_into_place,
     relative_path,
     save_to_temp,
@@ -54,7 +56,8 @@ router = APIRouter(tags=["Materials"])
 SUMMARY_SQL = """
     SELECT id, course_id, title, original_filename, file_size, page_count,
            pages_processed, status, error_message, chunk_count, table_count,
-           vision_page_count, created_at, updated_at
+           vision_page_count, created_at, updated_at, processing_mode,
+           vision_waiting_count, vision_done_count, vision_failed_count
     FROM material_overview
     WHERE user_id = :user_id
 """
@@ -104,6 +107,12 @@ def title_from_filename(filename: str) -> str:
 def upload_material(
     course_id: UUID,
     file: UploadFile = File(..., description="A PDF file"),
+    # A second form field next to the file. Literal = only these two values
+    # are accepted; anything else is a 422 before our code runs.
+    mode: Literal["smart", "thorough"] = Form(
+        "smart",
+        description="smart: only pages with pictures are read as images; thorough: every page is",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -185,6 +194,7 @@ def upload_material(
                 content_hash=content_hash,
                 page_count=page_count,
                 status="pending",
+                processing_mode=mode,
             )
         )
         try:
@@ -195,7 +205,7 @@ def upload_material(
     except BaseException:
         temp.unlink(missing_ok=True)
         if final_rel:
-            delete_files([final_rel])
+            delete_material_files([final_rel])
         raise
 
     # 6. Only AFTER the commit: a worker thread uses its own connection, and
@@ -253,6 +263,7 @@ def download_material(
 PAGES_SQL = """
     SELECT p.page_number, p.char_count, p.table_count, p.image_count,
            p.drawing_count, p.math_symbol_count, p.needs_vision,
+           p.vision_status, (p.image_path IS NOT NULL) AS has_image,
            count(dc.id) AS chunk_count
     FROM document_pages p
     LEFT JOIN document_chunks dc
@@ -295,7 +306,30 @@ def get_page(
     )
     summary = PageSummary.model_validate(page)
     summary.chunk_count = len(chunks)
+    summary.has_image = page.image_path is not None
     return PageDetail(page=summary, chunks=[ChunkResponse.model_validate(c) for c in chunks])
+
+
+@router.get("/materials/{material_id}/pages/{page_number}/image")
+def get_page_image(
+    material_id: UUID,
+    page_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The saved picture of a page. Same ownership check as everything else:
+    someone else's page picture is a 404, like their file."""
+    get_owned_material_or_404(db, material_id, current_user)
+    page = db.get(DocumentPage, (material_id, page_number))
+    if page is None or page.image_path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This page has no picture.")
+    path = absolute_path(page.image_path)
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "The page picture is missing.")
+    # "private": only the student's own browser may cache it, never a shared
+    # proxy (it's their notes). One hour: switching between pages in the
+    # viewer doesn't download the same picture again.
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 # ------------------------------------------------------------------
@@ -352,4 +386,4 @@ def delete_material(
     stored = material.stored_path
     db.delete(material)  # ON DELETE CASCADE removes its pages and chunks
     db.commit()
-    delete_files([stored])  # the row is gone for sure; now remove the file
+    delete_material_files([stored])  # the row is gone for sure; now remove the file

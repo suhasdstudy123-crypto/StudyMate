@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ImageOff, Loader2, Table2 } from "lucide-react";
+import { ExternalLink, ImageOff, Loader2, ScanEye, Table2, Workflow } from "lucide-react";
 
 import { Dialog } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api";
-import { getPage, listPages, type Chunk, type Material, type PageDetail, type PageSummary } from "@/lib/materials";
+import {
+  getPage,
+  listPages,
+  pageImageUrl,
+  type Chunk,
+  type Material,
+  type PageDetail,
+  type PageSummary,
+} from "@/lib/materials";
 import { cn } from "@/lib/utils";
 
 /*
@@ -13,7 +21,8 @@ import { cn } from "@/lib/utils";
 
     left:  every page, with markers for tables and for pages that have
            pictures the text reader can't see
-    right: the passages (chunks) of the selected page, in order
+    right: the passages (chunks) of the selected page, in order, and for
+           pages the image reader reads, the page picture it is sent
 
   This is the same text that search (Stage 6) and the chat (Stage 7) will
   use, so it's the place to check that a PDF was read correctly.
@@ -105,14 +114,14 @@ function Viewer({ material }: { material: Material }) {
             <Loader2 className="size-5 animate-spin" aria-label="Loading" />
           </div>
         ) : (
-          <PageView detail={detail} />
+          <PageView materialId={material.id} detail={detail} />
         )}
       </section>
     </div>
   );
 }
 
-function PageView({ detail }: { detail: PageDetail }) {
+function PageView({ materialId, detail }: { materialId: string; detail: PageDetail }) {
   const { page, chunks } = detail;
   return (
     <div className="grid gap-3">
@@ -121,17 +130,11 @@ function PageView({ detail }: { detail: PageDetail }) {
         {page.table_count > 0 && ` · ${page.table_count} ${page.table_count === 1 ? "table" : "tables"}`}
       </p>
 
-      {page.needs_vision && (
-        <div className="flex items-start gap-2.5 rounded-md border border-dashed bg-muted/60 px-3.5 py-3 text-sm">
-          <ImageOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p>
-            <span className="font-semibold">This page has {describeVisuals(page)}.</span>{" "}
-            <span className="text-muted-foreground">
-              Text extraction can&apos;t see inside pictures, so only the text around them is below. The image reader
-              (coming soon) will read the rest.
-            </span>
-          </p>
-        </div>
+      {page.vision_status !== "none" && <VisionNote page={page} />}
+
+      {page.has_image && (
+        // key: a new page = a new <img>, so the "loading" state starts over
+        <PagePicture key={page.page_number} src={pageImageUrl(materialId, page.page_number)} page={page.page_number} />
       )}
 
       {chunks.length === 0 ? (
@@ -147,6 +150,89 @@ function PageView({ detail }: { detail: PageDetail }) {
   );
 }
 
+/*
+  What the image reader has done with this page, in plain words.
+  vision_status: pending | processing | done | failed  ("none" shows nothing)
+*/
+function VisionNote({ page }: { page: PageSummary }) {
+  const what = page.needs_vision
+    ? `This page has ${describeVisuals(page)}.`
+    : "Thorough mode: this page is also read as a picture.";
+  const status = {
+    none: "",
+    pending:
+      "Text extraction can't see inside pictures, so only the text around them is below. The page is waiting for the image reader, which will read the picture below.",
+    processing: "The image reader is reading the picture below right now.",
+    done: "The image reader has read the picture below. Its passages are marked “Read from an image”: check them against the picture.",
+    failed: "The image reader couldn't read this page. You can try it again.",
+  }[page.vision_status];
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-md border border-dashed bg-muted/60 px-3.5 py-3 text-sm">
+      {page.vision_status === "done" ? (
+        <ScanEye className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+      ) : page.vision_status === "processing" ? (
+        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+      ) : (
+        <ImageOff
+          className={cn("mt-0.5 size-4 shrink-0", page.vision_status === "failed" ? "text-destructive" : "text-muted-foreground")}
+          aria-hidden="true"
+        />
+      )}
+      <p>
+        <span className="font-semibold">{what}</span> <span className="text-muted-foreground">{status}</span>
+      </p>
+    </div>
+  );
+}
+
+/*
+  The saved page picture: exactly what the image reader is (or was) sent.
+  A plain <img>, not next/image: next/image would download the picture on
+  the SERVER, without the student's login cookie, and get a 401.
+  Click = full size in a new tab, to zoom into small screenshot text.
+*/
+function PagePicture({ src, page }: { src: string; page: number }) {
+  const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
+
+  if (state === "error") {
+    return (
+      <p className="rounded-md border bg-background px-4 py-6 text-center text-sm text-muted-foreground">
+        The picture of this page couldn&apos;t be loaded.
+      </p>
+    );
+  }
+  return (
+    <figure className="overflow-hidden rounded-md border bg-background">
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener"
+        className={cn(
+          "relative block outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          state === "loading" && "min-h-48",
+        )}
+      >
+        {state === "loading" && <span className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />}
+        {/* eslint-disable-next-line @next/next/no-img-element -- see the comment above PagePicture */}
+        <img
+          src={src}
+          alt={`Page ${page} of the PDF, as a picture`}
+          onLoad={() => setState("loaded")}
+          onError={() => setState("error")}
+          className="relative block h-auto w-full"
+        />
+      </a>
+      <figcaption className="flex items-center gap-2 border-t px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
+        The page as a picture
+        <a href={src} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 hover:text-foreground">
+          Full size <ExternalLink className="size-3" aria-hidden="true" />
+        </a>
+      </figcaption>
+    </figure>
+  );
+}
+
 function describeVisuals(p: PageSummary): string {
   const parts: string[] = [];
   if (p.image_count) parts.push(p.image_count === 1 ? "a picture" : `${p.image_count} pictures`);
@@ -159,10 +245,19 @@ function describeVisuals(p: PageSummary): string {
 function ChunkCard({ chunk, position, total }: { chunk: Chunk; position: number; total: number }) {
   return (
     <article className="rounded-md border bg-background">
-      <header className="flex items-center gap-2 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
-        {chunk.chunk_type === "table" ? <Table2 className="size-3.5" aria-hidden="true" /> : null}
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
+        {chunk.chunk_type === "table" && <Table2 className="size-3.5" aria-hidden="true" />}
+        {chunk.chunk_type === "diagram" && <Workflow className="size-3.5" aria-hidden="true" />}
         Passage {position} of {total}
-        {chunk.chunk_type === "table" && " · table"}
+        {chunk.chunk_type !== "text" && ` · ${chunk.chunk_type}`}
+        {chunk.source === "vision" && (
+          // The honest label: this text was written by the image reader, not copied from the PDF.
+          // Dashed outline, not highlighter yellow: yellow is reserved for cited text.
+          <span className="inline-flex items-center gap-1 rounded-sm border border-dashed border-primary/60 px-1.5 py-px text-primary">
+            <ScanEye className="size-3" aria-hidden="true" />
+            Read from an image — check it
+          </span>
+        )}
         <span className="ml-auto tabular-nums">~{chunk.token_count} tokens</span>
       </header>
       {chunk.chunk_type === "table" ? (

@@ -9,7 +9,7 @@ from backend.app.database import get_db
 from backend.app.deps import get_current_user
 from backend.app.models import Course, Material, User
 from backend.app.schemas import CourseCreate, CourseSummary, CourseUpdate
-from backend.app.storage import delete_files
+from backend.app.storage import delete_material_files
 
 # Every route here requires a logged-in user, and only ever touches
 # that user's OWN courses. The client never says whose courses these
@@ -160,4 +160,4 @@ def delete_course(
     db.delete(course)
     db.commit()
     # The database can't delete files on disk, so we do it after the commit.
-    delete_files([f.stored_path for f in files])
+    delete_material_files([f.stored_path for f in files])

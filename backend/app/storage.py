@@ -2,6 +2,7 @@
 Where uploaded PDFs live on disk, and the only code that touches them.
 
 Layout:   UPLOAD_DIR/<user id>/<material id>.pdf
+          UPLOAD_DIR/<user id>/<material id>/page-0012.png   (page pictures, 5b)
           UPLOAD_DIR/tmp/<random>.part      (uploads still arriving)
 
 Security rules:
@@ -15,6 +16,7 @@ Security rules:
 import hashlib
 import logging
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import BinaryIO
@@ -79,12 +81,40 @@ def move_into_place(temp: Path, rel: str) -> Path:
     return final
 
 
-def delete_files(rel_paths: list[str]) -> None:
-    """Remove stored PDFs AFTER their database rows were deleted.
-    A file that can't be removed (already gone, or open in another program
-    on Windows) is logged, not fatal: the rows are already gone."""
-    for rel in rel_paths:
+def page_image_path(pdf_rel: str, page_number: int) -> str:
+    """"<user>/<material>.pdf" -> "<user>/<material>/page-0012.png".
+    A folder per file: deleting the file deletes one folder, nothing to hunt for.
+    Zero-padded so the pictures sort in page order in a file explorer."""
+    folder = pdf_rel.removesuffix(".pdf")
+    return f"{folder}/page-{page_number:04d}.png"
+
+
+def save_bytes(rel: str, data: bytes) -> None:
+    """Write a file so it is either complete or absent, never half-written:
+    write to a temporary name in the same folder, then rename (os.replace is
+    all-or-nothing). A crash mid-write can't leave a broken picture that
+    the browser would then show."""
+    final = absolute_path(rel)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    temp = final.with_name(f".{final.name}.{uuid.uuid4().hex}.part")
+    try:
+        temp.write_bytes(data)
+        os.replace(temp, final)
+    except BaseException:
+        temp.unlink(missing_ok=True)
+        raise
+
+
+def delete_material_files(pdf_rel_paths: list[str]) -> None:
+    """Remove stored PDFs and their page-picture folders AFTER their
+    database rows were deleted. Something that can't be removed (already
+    gone, or open in another program on Windows) is logged, not fatal:
+    the rows are already gone."""
+    for rel in pdf_rel_paths:
         try:
             absolute_path(rel).unlink(missing_ok=True)
+            folder = absolute_path(rel.removesuffix(".pdf"))
+            if folder.is_dir():
+                shutil.rmtree(folder)
         except (OSError, ValueError):
-            log.warning("Could not delete stored file %s", rel, exc_info=True)
+            log.warning("Could not delete stored files for %s", rel, exc_info=True)

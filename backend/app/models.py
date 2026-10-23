@@ -155,6 +155,10 @@ class Material(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()
+    # 'smart' = only pages with pictures go to the image reader; 'thorough' = all (migration 003)
+    processing_mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'smart'")
+    )
 
     course: Mapped["Course"] = relationship(back_populates="materials")
     pages: Mapped[list["DocumentPage"]] = relationship(
@@ -183,6 +187,14 @@ class DocumentPage(Base):
     math_symbol_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     needs_vision: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = created_at_col()
+    # Image reading of this page (migration 003): none | pending | processing | done | failed
+    vision_status: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'none'")
+    )
+    vision_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    vision_error: Mapped[str | None] = mapped_column(Text)
+    vision_model: Mapped[str | None] = mapped_column(String(100))
+    image_path: Mapped[str | None] = mapped_column(Text)  # relative, like materials.stored_path
 
     material: Mapped["Material"] = relationship(back_populates="pages")
 
@@ -211,6 +223,10 @@ class DocumentChunk(Base):
         TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )
     created_at: Mapped[datetime] = created_at_col()
+    # HOW it was read: 'pdf_text' (exact) or 'vision' (written by the image reader)
+    source: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'pdf_text'")
+    )
 
     material: Mapped["Material"] = relationship(back_populates="chunks")
 

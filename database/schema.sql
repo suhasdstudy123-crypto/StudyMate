@@ -121,6 +121,9 @@ CREATE TABLE materials (
     pages_processed   INTEGER      NOT NULL DEFAULT 0,  -- progress bar: "page 12 of 40"
     status            VARCHAR(20)  NOT NULL DEFAULT 'pending',
     error_message     TEXT,
+    -- 'smart' = only pages with pictures go to the image reader (5b);
+    -- 'thorough' = every page does (added by migrations/003)
+    processing_mode   VARCHAR(10)  NOT NULL DEFAULT 'smart',
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
@@ -135,7 +138,8 @@ CREATE TABLE materials (
         CHECK (pages_processed >= 0 AND (page_count IS NULL OR pages_processed <= page_count)),
     CONSTRAINT materials_status_check       CHECK (status IN ('pending', 'processing', 'ready', 'failed')),
     -- A failed upload must say why, so the UI can show the reason.
-    CONSTRAINT materials_failed_has_error   CHECK (status <> 'failed' OR error_message IS NOT NULL)
+    CONSTRAINT materials_failed_has_error   CHECK (status <> 'failed' OR error_message IS NOT NULL),
+    CONSTRAINT materials_mode_check         CHECK (processing_mode IN ('smart', 'thorough'))
 );
 
 
@@ -157,13 +161,26 @@ CREATE TABLE document_pages (
     math_symbol_count  INTEGER     NOT NULL DEFAULT 0,  -- symbols like ∑ ∫ ≤ θ (formulas)
     needs_vision       BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Image reading of this page (added by migrations/003):
+    --   none -> not needed; pending -> processing -> done | failed
+    vision_status      VARCHAR(10) NOT NULL DEFAULT 'none',
+    vision_attempts    INTEGER     NOT NULL DEFAULT 0,
+    vision_error       TEXT,
+    vision_model       VARCHAR(100),  -- which model read it
+    image_path         TEXT,          -- saved page picture (relative path), for citations
 
     PRIMARY KEY (material_id, page_number),
     CONSTRAINT document_pages_page_check   CHECK (page_number > 0),
     CONSTRAINT document_pages_counts_check CHECK (
         char_count >= 0 AND table_count >= 0 AND image_count >= 0
         AND drawing_count >= 0 AND math_symbol_count >= 0
-    )
+    ),
+    CONSTRAINT document_pages_vision_status_check
+        CHECK (vision_status IN ('none', 'pending', 'processing', 'done', 'failed')),
+    CONSTRAINT document_pages_vision_attempts_check
+        CHECK (vision_attempts >= 0),
+    CONSTRAINT document_pages_vision_failed_has_error
+        CHECK (vision_status <> 'failed' OR vision_error IS NOT NULL)
 );
 
 
@@ -181,7 +198,8 @@ CREATE TABLE document_chunks (
     page_number INTEGER     NOT NULL,   -- page the chunk starts on (for citations)
     content     TEXT        NOT NULL,
     token_count INTEGER,
-    -- 'text' = a passage of prose; 'table' = one whole table as markdown
+    -- WHAT it is: 'text' = prose; 'table' = one whole table as markdown;
+    -- 'diagram' = a description of a diagram (from the image reader)
     chunk_type  VARCHAR(10) NOT NULL DEFAULT 'text',
 
     -- Semantic meaning of `content`, produced by the embedding model.
@@ -195,13 +213,17 @@ CREATE TABLE document_chunks (
     content_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- HOW it was read: 'pdf_text' = exact, from the PDF's text layer;
+    -- 'vision' = written by the image reader (added by migrations/003)
+    source      VARCHAR(10) NOT NULL DEFAULT 'pdf_text',
 
     CONSTRAINT document_chunks_unique_index  UNIQUE (material_id, chunk_index),
     CONSTRAINT document_chunks_index_check   CHECK (chunk_index >= 0),
     CONSTRAINT document_chunks_page_check    CHECK (page_number > 0),
     CONSTRAINT document_chunks_content_check CHECK (length(trim(content)) > 0),
     CONSTRAINT document_chunks_tokens_check  CHECK (token_count IS NULL OR token_count > 0),
-    CONSTRAINT document_chunks_type_check    CHECK (chunk_type IN ('text', 'table')),
+    CONSTRAINT document_chunks_type_check    CHECK (chunk_type IN ('text', 'table', 'diagram')),
+    CONSTRAINT document_chunks_source_check  CHECK (source IN ('pdf_text', 'vision')),
     -- COMPOSITE foreign key: the chunk's (file, page) pair must be a real page.
     CONSTRAINT document_chunks_page_fk FOREIGN KEY (material_id, page_number)
         REFERENCES document_pages(material_id, page_number) ON DELETE CASCADE
@@ -281,6 +303,10 @@ CREATE INDEX idx_chunks_material_page     ON document_chunks(material_id, page_n
 -- Partial index: only rows WHERE needs_vision are in it, so it stays tiny
 -- and "which pages of this file need the image reader?" is fast (5b).
 CREATE INDEX idx_pages_needs_vision ON document_pages(material_id) WHERE needs_vision;
+-- The image reader's queue: only waiting/active pages are in it (migrations/003).
+CREATE INDEX idx_pages_vision_queue
+    ON document_pages (material_id, page_number)
+    WHERE vision_status IN ('pending', 'processing');
 
 -- Full-text search: GIN ("generalized inverted index") maps each
 -- word to the chunks containing it, like the index at the back of a book.
@@ -392,9 +418,22 @@ SELECT
     (SELECT count(*) FROM document_chunks dc
       WHERE dc.material_id = m.id AND dc.chunk_type = 'table') AS table_count,
     (SELECT count(*) FROM document_pages dp
-      WHERE dp.material_id = m.id AND dp.needs_vision)         AS vision_page_count
+      WHERE dp.material_id = m.id AND dp.needs_vision)         AS vision_page_count,
+    m.processing_mode,
+    v.vision_waiting_count,
+    v.vision_done_count,
+    v.vision_failed_count
 FROM materials m
-JOIN courses c ON c.id = m.course_id;
+JOIN courses c ON c.id = m.course_id
+-- Image-reading progress (migrations/003): LATERAL runs once per material,
+-- reads its pages once and counts them three ways with FILTER.
+CROSS JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE dp.vision_status IN ('pending', 'processing')) AS vision_waiting_count,
+           count(*) FILTER (WHERE dp.vision_status = 'done')                     AS vision_done_count,
+           count(*) FILTER (WHERE dp.vision_status = 'failed')                   AS vision_failed_count
+      FROM document_pages dp
+     WHERE dp.material_id = m.id
+) v;
 
 
 -- ============================================================

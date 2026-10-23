@@ -51,3 +51,11 @@ A running log of frontend decisions and why they were made.
 - **"What StudyMate read"** dialog: page list (table and picture markers) + that page's passages, exactly as stored. Text from notes in the serif font; table chunks parsed from markdown into a real `<table>`.
 - **Rename** (`PATCH /materials/{id}`) changes only the display title; delete is disabled while a file is being read (the backend would answer 409).
 - **Grid blowout fix:** a CSS grid column is never narrower than its widest content by default, so on phones the page and the viewer were wider than the screen. `grid-cols-1` / `minmax(0, 1fr)` lets the column shrink. On phones the file actions wrap onto their own line (no hover, so all are visible).
+
+## Stage 5b — Page pictures in "What StudyMate read"
+
+- Passages are numbered per page ("Passage 2 of 3"), not by the file-wide index.
+- **Themed scrollbars:** `scrollbar-color` on `<html>` (inherited by every scroll area) with the soft ink token, transparent track; `scrollbar-width: thin` inside the page. Safari fallback with `::-webkit-scrollbar` inside `@supports not (scrollbar-color: auto)`.
+- Pages the image reader reads show **the page picture** (exactly what the reader is sent), with a skeleton while loading and "Full size" to zoom into screenshot text. A plain `<img>`, not `next/image`: `next/image` downloads on the server without the login cookie.
+- A status note per page: waiting / being read / read / failed. Thorough-mode pages without pictures say so.
+- Passages written by the image reader carry a **"Read from an image — check it"** label (dashed outline in ink, not highlighter yellow: yellow is reserved for cited text). Diagram passages get their own icon.

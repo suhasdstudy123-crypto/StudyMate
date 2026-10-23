@@ -156,9 +156,13 @@ class MaterialSummary(BaseModel):
     error_message: str | None
     chunk_count: int
     table_count: int
-    vision_page_count: int        # pages the image reader (5b) still has to read
+    vision_page_count: int        # pages with pictures (found by the text pass)
     created_at: datetime
     updated_at: datetime
+    processing_mode: str          # smart | thorough
+    vision_waiting_count: int     # pages queued for / being read by the image reader
+    vision_done_count: int
+    vision_failed_count: int
 
 
 class MaterialUpdate(BaseModel):
@@ -176,6 +180,8 @@ class PageSummary(ORMSchema):
     drawing_count: int
     math_symbol_count: int
     needs_vision: bool
+    vision_status: str            # none | pending | processing | done | failed
+    has_image: bool = False       # a page picture is saved (GET .../pages/{n}/image)
     chunk_count: int = 0
 
 
@@ -183,7 +189,8 @@ class ChunkResponse(ORMSchema):
     id: UUID
     chunk_index: int
     page_number: int
-    chunk_type: str
+    chunk_type: str               # text | table | diagram
+    source: str                   # pdf_text | vision
     content: str
     token_count: int | None
 

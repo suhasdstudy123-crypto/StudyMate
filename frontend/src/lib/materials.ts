@@ -11,6 +11,7 @@ import { api, ApiError, errorFromResponse } from "@/lib/api";
     listPages(id)               GET    /api/materials/{id}/pages
     getPage(id, n)              GET    /api/materials/{id}/pages/{n}
     fileUrl(id)                 the PDF itself, opened in a new tab
+    pageImageUrl(id, n)         the saved picture of page n (pages the image reader reads)
 */
 
 /** One file, matching MaterialSummary in backend/app/schemas.py. */
@@ -29,7 +30,14 @@ export type Material = {
   vision_page_count: number;
   created_at: string;
   updated_at: string;
+  processing_mode: "smart" | "thorough";
+  vision_waiting_count: number;
+  vision_done_count: number;
+  vision_failed_count: number;
 };
+
+/** What the image reader has done with a page (document_pages.vision_status). */
+export type VisionStatus = "none" | "pending" | "processing" | "done" | "failed";
 
 export type PageSummary = {
   page_number: number;
@@ -39,6 +47,8 @@ export type PageSummary = {
   drawing_count: number;
   math_symbol_count: number;
   needs_vision: boolean;
+  vision_status: VisionStatus;
+  has_image: boolean;
   chunk_count: number;
 };
 
@@ -46,7 +56,9 @@ export type Chunk = {
   id: string;
   chunk_index: number;
   page_number: number;
-  chunk_type: "text" | "table";
+  chunk_type: "text" | "table" | "diagram";
+  /** pdf_text = exact, from the PDF; vision = written by the image reader */
+  source: "pdf_text" | "vision";
   content: string;
   token_count: number | null;
 };
@@ -84,6 +96,10 @@ export function getPage(id: string, page: number) {
 }
 
 export const fileUrl = (id: string) => `/api/materials/${id}/file`;
+
+// Used as <img src>. The browser sends the login cookie with it (same origin
+// through the /api rewrite), so the backend's owner check still applies.
+export const pageImageUrl = (id: string, page: number) => `/api/materials/${id}/pages/${page}/image`;
 
 /*
   Upload with a progress bar.
