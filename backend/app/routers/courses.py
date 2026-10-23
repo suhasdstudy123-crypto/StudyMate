@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.deps import get_current_user
-from backend.app.models import Course, User
+from backend.app.models import Course, Material, User
 from backend.app.schemas import CourseCreate, CourseSummary, CourseUpdate
+from backend.app.storage import delete_files
 
 # Every route here requires a logged-in user, and only ever touches
 # that user's OWN courses. The client never says whose courses these
@@ -148,7 +149,15 @@ def delete_course(
     current_user: User = Depends(get_current_user),
 ):
     course = get_owned_course_or_404(db, course_id, current_user)
-    # ON DELETE CASCADE in the schema removes its materials and chunks;
-    # its chat sessions are kept with course_id set to NULL.
+    files = db.query(Material.stored_path, Material.status).filter(Material.course_id == course.id).all()
+    if any(f.status == "processing" for f in files):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "A file in this course is being read right now. Try again when it's done.",
+        )
+    # ON DELETE CASCADE in the schema removes its materials, pages and
+    # chunks; its chat sessions are kept with course_id set to NULL.
     db.delete(course)
     db.commit()
+    # The database can't delete files on disk, so we do it after the commit.
+    delete_files([f.stored_path for f in files])

@@ -9,6 +9,9 @@ node_modules/
 .next/
 out/
 
+# Uploaded study material (students' private files, can be large)
+backend/uploads/
+
 # Python virtual environments and caches
 venv/
 .venv/

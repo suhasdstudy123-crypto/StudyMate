@@ -32,3 +32,29 @@ A running log of backend decisions and why they were made.
 - **Validation bug fixed.** `{"name": "   "}` passed `min_length=1` and was then rejected by the database CHECK, which came back as a wrong "duplicate name" 409. Now names are stripped *before* validation (`mode="before"`), so blank names get a clear 422. `{"name": null}` on PATCH is also a 422. Empty code/description become `NULL`.
 - `GET /courses` is ordered by most recent activity.
 - **Known for Stage 5:** deleting a course cascades to materials/chunks in the database, but uploaded files on disk must also be removed then.
+
+## Stage 5a (part 1) — Upload and reading PDFs
+
+- **Migration 002** adds `materials.pages_processed` (progress), the `document_pages` table (one row per page, composite primary key `(material_id, page_number)`), `document_chunks.chunk_type` (`text`/`table`), a **composite foreign key** chunk → page, a **partial index** on pages that need the image reader, and the `material_overview` view. Re-running it fails and rolls back (nothing changes).
+- **PDF library: PyMuPDF 1.28.2.** It does text, tables, images, drawings and page rendering (needed in 5b) in one library. Licence is AGPL, which is fine for a public open-source repo; a closed-source product would need a commercial licence or another library. 2.0 was 3 days old, so the last 1.x release is pinned. `python-multipart` is what lets FastAPI read file uploads (multipart/form-data).
+- **Upload checks, in order:** owner of the course (404) → size while copying (413, `MAX_UPLOAD_MB`) → empty (422) → starts with `%PDF-` (415; the file name and browser type are not trusted) → opens in PyMuPDF (422 damaged) → not password-protected (422) → 1..`MAX_PDF_PAGES` pages (422) → same SHA-256 already in this course (409, the UNIQUE constraint is the final guard).
+- **Files on disk:** `backend/uploads/<user id>/<material id>.pdf` (gitignored). The student's file name is never part of a path (path traversal). The database stores only the relative path.
+- **File + row consistency:** a database transaction can't undo a file write. So: move the file into place, then commit the row; if the commit fails, delete the file (compensating action). On delete: commit the row deletion first, then remove the file. Deleting a course now removes its files too.
+- **Background processing:** a `ThreadPoolExecutor` (2 workers) inside the backend. Upload answers `202 Accepted` at once; the browser polls `GET /materials/{id}`. Jobs live in memory, so on startup (FastAPI **lifespan**) unfinished files are re-queued and leftover `.part` files removed.
+- **Two sessions in the worker:** `work` = one transaction for all pages + chunks, committed once at the end (atomic: a crash leaves nothing half-done); `progress` = a tiny commit per page so the browser sees "page 12 of 40". Tested: another connection sees progress rising but 0 chunks until the final commit (isolation, READ COMMITTED). Killing the server at page 124 left 0 chunks; restart re-queued it and finished cleanly.
+- **No deadlock between the two sessions:** inserting a page takes a `FOR KEY SHARE` lock on the materials row (foreign key check); the progress UPDATE only changes non-key columns, which needs `FOR NO KEY UPDATE`. PostgreSQL designed these two lock modes to be compatible.
+- **Claiming a job** is a conditional `UPDATE ... WHERE status = 'pending' RETURNING`: only one worker can win the row.
+- **A failed file stores no pages or chunks**, only `error_message` (deleted in the same transaction that marks it failed). Retry: `failed → pending`.
+- **Delete while processing → 409** (the worker's transaction holds the row).
+- **Extraction (`processing/extract.py`):** blocks sorted into reading order; repeated headers/footers (same text in the top/bottom 8% of ≥40% of pages, numbers ignored) and bare page numbers dropped; tables via `find_tables()` → markdown, kept whole, with the latest heading on top; text inside a table's area skipped (otherwise read twice); NUL/control characters removed (PostgreSQL TEXT can't store `\x00`).
+- **needs_vision (for 5b):** embedded images, ≥3 drawings outside tables (diagrams), ≥3 maths symbols, or very little text plus a drawing. Table grid lines don't count as drawings.
+- **Chunking (`processing/chunking.py`):** never across pages (exact page citations), ~900 characters, new chunk at headings, tables one chunk, one-sentence overlap between text chunks, tiny leftovers merged. `token_count` is an estimate until Stage 6 uses the real tokenizer.
+- **Speed (sandbox):** a 300-page text PDF took ~27 s (≈90 ms per page, mostly table detection).
+- **Tuned on a real lecture deck** (41 PES DBMS slides, made with Online2PDF). The first version flagged all 41 pages for the image reader and kept the slide header in every chunk. Fixes:
+  - **Images actually drawn** (`get_image_info`), not every image a page *references* (this PDF attaches 107 to each page).
+  - **Repeated things are decoration**, found in a first pass over the whole PDF: text in the top/bottom 12% on ≥40% of pages (header "Database Management Systems"), the same image or an image at the same spot on ≥40% of pages (logo), the same drawing at the same place (line under each title).
+  - **Invisible drawings ignored:** white or unfilled shapes with no outline (text-box backgrounds), page-sized backgrounds.
+  - **Page number as the last line of a block** is stripped.
+  - **Broken justified lines rejoined** (a line not ending a sentence + one starting lowercase), even if the first line looked like a heading.
+  - **Bullets normalised** (● ❏ ■ ▪ → •).
+  - Result: 19 pages flagged = all 17 slides with screenshots/diagrams/image tables + the title and thank-you slides (big logo, only 2 pages, so not "repeated"; accepted to avoid hiding a diagram repeated on a recap slide). All 22 text slides correctly not flagged. 42 chunks, ~1 per slide.

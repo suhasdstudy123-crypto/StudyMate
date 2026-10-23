@@ -35,3 +35,7 @@ A running log of frontend decisions and why they were made.
 - **Course cards are notebooks:** a ballpoint spine with binding holes, ruled lines (`.ruled`), course code as a label. Edit/delete icons appear on hover with a mouse, are always visible on touch screens (`@media (hover: hover)`), and show on keyboard focus.
 - **Data loading in an effect** sets state only when the answer arrives, with an `alive` flag to ignore late answers. "Try again" bumps a counter that re-runs the effect. (ESLint's `react-hooks/set-state-in-effect` rule flags setting state synchronously inside an effect, because that causes an extra render.)
 - **Dashboard** ticks "Make your first course" from real data and shows the 3 most recent courses.
+
+## Stage 5a — Uploads through the forwarder
+
+- **`experimental.proxyClientMaxBodySize: "60mb"` in `next.config.ts`.** Next.js reads at most 10 MB of a request body before forwarding it; a 35 MB PDF was cut off and the browser got a 500 ("socket hang up" in the Next terminal). 60 MB is a bit above the backend's 50 MB, so oversized files still get FastAPI's clear 413 message.

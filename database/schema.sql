@@ -22,6 +22,7 @@
 -- (Never run this against a database with real user data.)
 -- ============================================================
 
+DROP VIEW     IF EXISTS material_overview;
 DROP VIEW     IF EXISTS user_overview;
 DROP VIEW     IF EXISTS course_overview;
 DROP FUNCTION IF EXISTS search_chunks(vector, uuid, uuid, integer);
@@ -29,6 +30,7 @@ DROP TABLE    IF EXISTS message_sources  CASCADE;
 DROP TABLE    IF EXISTS chat_messages    CASCADE;
 DROP TABLE    IF EXISTS chat_sessions    CASCADE;
 DROP TABLE    IF EXISTS document_chunks  CASCADE;
+DROP TABLE    IF EXISTS document_pages   CASCADE;
 DROP TABLE    IF EXISTS materials        CASCADE;
 DROP TABLE    IF EXISTS courses          CASCADE;
 DROP TABLE    IF EXISTS users            CASCADE;
@@ -116,6 +118,7 @@ CREATE TABLE materials (
     file_size         BIGINT       NOT NULL,
     content_hash      CHAR(64)     NOT NULL,   -- SHA-256 of the file bytes
     page_count        INTEGER,
+    pages_processed   INTEGER      NOT NULL DEFAULT 0,  -- progress bar: "page 12 of 40"
     status            VARCHAR(20)  NOT NULL DEFAULT 'pending',
     error_message     TEXT,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -128,9 +131,39 @@ CREATE TABLE materials (
     CONSTRAINT materials_mime_check         CHECK (mime_type IN ('application/pdf')),
     CONSTRAINT materials_file_size_check    CHECK (file_size > 0),
     CONSTRAINT materials_page_count_check   CHECK (page_count IS NULL OR page_count > 0),
+    CONSTRAINT materials_pages_processed_check
+        CHECK (pages_processed >= 0 AND (page_count IS NULL OR pages_processed <= page_count)),
     CONSTRAINT materials_status_check       CHECK (status IN ('pending', 'processing', 'ready', 'failed')),
     -- A failed upload must say why, so the UI can show the reason.
     CONSTRAINT materials_failed_has_error   CHECK (status <> 'failed' OR error_message IS NOT NULL)
+);
+
+
+-- ============================================================
+-- 3b. DOCUMENT PAGES  (added by migrations/002)
+-- One row per PDF page: what was found on it, and whether text
+-- extraction alone can't capture it (images, diagrams, formulas,
+-- scanned pages) so the image reader (Stage 5b) must look at it.
+-- Primary key = the PAIR (material_id, page_number).
+-- ============================================================
+
+CREATE TABLE document_pages (
+    material_id        UUID        NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+    page_number        INTEGER     NOT NULL,
+    char_count         INTEGER     NOT NULL DEFAULT 0,  -- characters of real text found
+    table_count        INTEGER     NOT NULL DEFAULT 0,
+    image_count        INTEGER     NOT NULL DEFAULT 0,  -- embedded pictures / scans
+    drawing_count      INTEGER     NOT NULL DEFAULT 0,  -- vector shapes outside tables (diagrams)
+    math_symbol_count  INTEGER     NOT NULL DEFAULT 0,  -- symbols like ∑ ∫ ≤ θ (formulas)
+    needs_vision       BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    PRIMARY KEY (material_id, page_number),
+    CONSTRAINT document_pages_page_check   CHECK (page_number > 0),
+    CONSTRAINT document_pages_counts_check CHECK (
+        char_count >= 0 AND table_count >= 0 AND image_count >= 0
+        AND drawing_count >= 0 AND math_symbol_count >= 0
+    )
 );
 
 
@@ -148,6 +181,8 @@ CREATE TABLE document_chunks (
     page_number INTEGER     NOT NULL,   -- page the chunk starts on (for citations)
     content     TEXT        NOT NULL,
     token_count INTEGER,
+    -- 'text' = a passage of prose; 'table' = one whole table as markdown
+    chunk_type  VARCHAR(10) NOT NULL DEFAULT 'text',
 
     -- Semantic meaning of `content`, produced by the embedding model.
     -- 384 = output size of the model we'll use (MiniLM / bge-small family).
@@ -165,7 +200,11 @@ CREATE TABLE document_chunks (
     CONSTRAINT document_chunks_index_check   CHECK (chunk_index >= 0),
     CONSTRAINT document_chunks_page_check    CHECK (page_number > 0),
     CONSTRAINT document_chunks_content_check CHECK (length(trim(content)) > 0),
-    CONSTRAINT document_chunks_tokens_check  CHECK (token_count IS NULL OR token_count > 0)
+    CONSTRAINT document_chunks_tokens_check  CHECK (token_count IS NULL OR token_count > 0),
+    CONSTRAINT document_chunks_type_check    CHECK (chunk_type IN ('text', 'table')),
+    -- COMPOSITE foreign key: the chunk's (file, page) pair must be a real page.
+    CONSTRAINT document_chunks_page_fk FOREIGN KEY (material_id, page_number)
+        REFERENCES document_pages(material_id, page_number) ON DELETE CASCADE
 );
 
 
@@ -236,6 +275,12 @@ CREATE INDEX idx_chat_sessions_user_id    ON chat_sessions(user_id);
 CREATE INDEX idx_chat_sessions_course_id  ON chat_sessions(course_id);
 CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id, created_at);
 CREATE INDEX idx_message_sources_chunk_id ON message_sources(chunk_id);
+-- Supports the chunk -> page foreign key and "chunks of page N".
+CREATE INDEX idx_chunks_material_page     ON document_chunks(material_id, page_number);
+
+-- Partial index: only rows WHERE needs_vision are in it, so it stays tiny
+-- and "which pages of this file need the image reader?" is fast (5b).
+CREATE INDEX idx_pages_needs_vision ON document_pages(material_id) WHERE needs_vision;
 
 -- Full-text search: GIN ("generalized inverted index") maps each
 -- word to the chunks containing it, like the index at the back of a book.
@@ -323,6 +368,33 @@ SELECT
         JOIN courses c ON c.id = m.course_id WHERE c.user_id = u.id) AS material_count,
     (SELECT COUNT(*) FROM chat_sessions s WHERE s.user_id = u.id)    AS chat_count
 FROM users u;
+
+
+-- Course page: one row per file with its counts (added by migrations/002).
+-- Each count is its own subquery so they don't multiply each other.
+-- user_id comes from the course, so the API can filter "my files only".
+CREATE VIEW material_overview AS
+SELECT
+    m.id,
+    m.course_id,
+    c.user_id,
+    m.title,
+    m.original_filename,
+    m.file_size,
+    m.page_count,
+    m.pages_processed,
+    m.status,
+    m.error_message,
+    m.created_at,
+    m.updated_at,
+    (SELECT count(*) FROM document_chunks dc
+      WHERE dc.material_id = m.id)                             AS chunk_count,
+    (SELECT count(*) FROM document_chunks dc
+      WHERE dc.material_id = m.id AND dc.chunk_type = 'table') AS table_count,
+    (SELECT count(*) FROM document_pages dp
+      WHERE dp.material_id = m.id AND dp.needs_vision)         AS vision_page_count
+FROM materials m
+JOIN courses c ON c.id = m.course_id;
 
 
 -- ============================================================

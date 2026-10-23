@@ -52,3 +52,20 @@ AUTH_COOKIE_NAME = "studymate_token"
 # Secure cookies are only sent over HTTPS. Local development runs on
 # plain http://localhost, so this is false locally and true in production.
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+# --- Uploaded files (Stage 5) ------------------------------------------
+# Where uploaded PDFs are kept. Default: backend/uploads (gitignored).
+# Only RELATIVE paths ("<user id>/<material id>.pdf") go into the database,
+# so this folder can move (e.g. to a disk on the server) without breaking rows.
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(BACKEND_DIR / "uploads"))).resolve()
+
+# Bigger uploads are refused (413). Lecture-note PDFs are usually < 20 MB.
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "50"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+# Longer PDFs are refused: a 2,000-page book would block processing for long.
+MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "500"))
+
+# How many PDFs are read at the same time (each uses one CPU core).
+PROCESSING_WORKERS = int(os.getenv("PROCESSING_WORKERS", "2"))

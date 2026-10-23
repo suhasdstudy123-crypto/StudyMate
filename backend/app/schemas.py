@@ -139,22 +139,51 @@ class CourseSummary(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Materials (created by the upload endpoint in Stage 5)
+# Materials (Stage 5): uploaded PDFs, their pages and chunks
 # ------------------------------------------------------------------
 
-class MaterialResponse(ORMSchema):
+class MaterialSummary(BaseModel):
+    # One file on the course page, read from the material_overview VIEW.
+    # stored_path and content_hash are internal details: never sent out.
     id: UUID
     course_id: UUID
     title: str
     original_filename: str
-    mime_type: str
     file_size: int
     page_count: int | None
-    status: str
+    pages_processed: int          # progress: "page 12 of 40"
+    status: str                   # pending | processing | ready | failed
     error_message: str | None
+    chunk_count: int
+    table_count: int
+    vision_page_count: int        # pages the image reader (5b) still has to read
     created_at: datetime
     updated_at: datetime
-    # stored_path and content_hash are internal details: not exposed.
+
+
+class PageSummary(ORMSchema):
+    page_number: int
+    char_count: int
+    table_count: int
+    image_count: int
+    drawing_count: int
+    math_symbol_count: int
+    needs_vision: bool
+    chunk_count: int = 0
+
+
+class ChunkResponse(ORMSchema):
+    id: UUID
+    chunk_index: int
+    page_number: int
+    chunk_type: str
+    content: str
+    token_count: int | None
+
+
+class PageDetail(BaseModel):
+    page: PageSummary
+    chunks: list[ChunkResponse]
 
 
 # ------------------------------------------------------------------
