@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, ImageOff, Loader2, ScanEye, Table2, Workflow } from "lucide-react";
+import { AlertTriangle, ExternalLink, ImageOff, Loader2, RotateCw, ScanEye, Table2, Workflow } from "lucide-react";
 
 import { Dialog } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api";
@@ -9,6 +9,7 @@ import {
   getPage,
   listPages,
   pageImageUrl,
+  retryFailedPages,
   type Chunk,
   type Material,
   type PageDetail,
@@ -29,9 +30,15 @@ import { cn } from "@/lib/utils";
   Text from your notes is shown in the serif font, the app's rule for
   "this came from your documents".
 */
-type Props = { material: Material | null; onClose: () => void };
+type Props = {
+  material: Material | null;
+  onClose: () => void;
+  // Tells the course page when this file changed here (failed pages retried),
+  // so the file row updates at once instead of on the next page load.
+  onChanged: (m: Material) => void;
+};
 
-export function PagesDialog({ material, onClose }: Props) {
+export function PagesDialog({ material, onClose, onChanged }: Props) {
   return (
     <Dialog
       open={material !== null}
@@ -40,12 +47,12 @@ export function PagesDialog({ material, onClose }: Props) {
       description={material ? <span className="font-semibold text-foreground">{material.title}</span> : null}
       className="max-w-5xl"
     >
-      {material && <Viewer key={material.id} material={material} />}
+      {material && <Viewer key={material.id} material={material} onChanged={onChanged} />}
     </Dialog>
   );
 }
 
-function Viewer({ material }: { material: Material }) {
+function Viewer({ material, onChanged }: { material: Material; onChanged: (m: Material) => void }) {
   const [pages, setPages] = useState<PageSummary[] | null>(null);
   const [current, setCurrent] = useState(1);
   const [detail, setDetail] = useState<PageDetail | null>(null);
@@ -123,7 +130,15 @@ function Viewer({ material }: { material: Material }) {
             <Loader2 className="size-5 animate-spin" aria-label="Loading" />
           </div>
         ) : (
-          <PageView materialId={material.id} detail={detail} />
+          <PageView
+            materialId={material.id}
+            detail={detail}
+            onRetry={async () => {
+              const updated = await retryFailedPages(material.id);
+              onChanged(updated);
+              setTick((n) => n + 1); // fetch again: the page is now waiting, and the refresh timer starts
+            }}
+          />
         )}
       </section>
     </div>
@@ -146,7 +161,15 @@ function PageVisionIcon({ page }: { page: PageSummary }) {
   }
 }
 
-function PageView({ materialId, detail }: { materialId: string; detail: PageDetail }) {
+function PageView({
+  materialId,
+  detail,
+  onRetry,
+}: {
+  materialId: string;
+  detail: PageDetail;
+  onRetry: () => Promise<void>;
+}) {
   const { page, chunks } = detail;
   return (
     <div className="grid gap-3">
@@ -155,7 +178,7 @@ function PageView({ materialId, detail }: { materialId: string; detail: PageDeta
         {page.table_count > 0 && ` · ${page.table_count} ${page.table_count === 1 ? "table" : "tables"}`}
       </p>
 
-      {page.vision_status !== "none" && <VisionNote page={page} />}
+      {page.vision_status !== "none" && <VisionNote page={page} onRetry={onRetry} />}
 
       {page.has_image && (
         // key: a new page = a new <img>, so the "loading" state starts over
@@ -179,7 +202,9 @@ function PageView({ materialId, detail }: { materialId: string; detail: PageDeta
   What the image reader has done with this page, in plain words.
   vision_status: pending | processing | done | failed  ("none" shows nothing)
 */
-function VisionNote({ page }: { page: PageSummary }) {
+function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promise<void> }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const what = page.needs_vision
     ? `This page has ${describeVisuals(page)}.`
     : "Thorough mode: this page is also read as a picture.";
@@ -189,7 +214,7 @@ function VisionNote({ page }: { page: PageSummary }) {
       "Text extraction can't see inside pictures, so only the text around them is below. The page is waiting for the image reader, which will read the picture below.",
     processing: "The image reader is reading the picture below right now.",
     done: "The image reader has read the picture below. Its passages are marked “Read from an image”: check them against the picture.",
-    failed: `The image reader couldn't read this page${page.vision_error ? ` (${page.vision_error})` : ""}. You can try it again from the file list.`,
+    failed: `The image reader gave up on this page after several tries${page.vision_error ? `: ${page.vision_error}` : ""}.`,
   }[page.vision_status];
 
   return (
@@ -204,9 +229,40 @@ function VisionNote({ page }: { page: PageSummary }) {
           aria-hidden="true"
         />
       )}
-      <p>
-        <span className="font-semibold">{what}</span> <span className="text-muted-foreground">{status}</span>
-      </p>
+      <div className="grid gap-2">
+        <p>
+          <span className="font-semibold">{what}</span> <span className="text-muted-foreground">{status}</span>
+        </p>
+        {page.vision_status === "failed" && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={async () => {
+                setRetrying(true);
+                setRetryError(null);
+                try {
+                  await onRetry();
+                } catch (err) {
+                  setRetryError(err instanceof ApiError ? err.message : "Couldn't start it again.");
+                } finally {
+                  setRetrying(false);
+                }
+              }}
+              className="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            >
+              {retrying ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <RotateCw className="size-3.5" aria-hidden="true" />
+              )}
+              Try again
+            </button>
+            <span className="text-xs text-muted-foreground">Retries every failed page of this file.</span>
+            {retryError && <span className="text-xs font-medium text-destructive">{retryError}</span>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

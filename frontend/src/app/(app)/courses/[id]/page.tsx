@@ -327,7 +327,11 @@ export default function CoursePage() {
         </section>
       )}
 
-      <PagesDialog material={viewing} onClose={() => setViewing(null)} />
+      <PagesDialog
+        material={viewing}
+        onClose={() => setViewing(null)}
+        onChanged={(updated) => setMaterials((list) => list.map((m) => (m.id === updated.id ? updated : m)))}
+      />
       <RenameMaterialDialog
         material={renaming}
         onClose={() => setRenaming(null)}

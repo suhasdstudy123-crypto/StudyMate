@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+import httpx
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel, Field
@@ -148,9 +149,11 @@ class VisionError(Exception):
 
 
 class ServerBusy(VisionError):
-    """5xx from Google (503 = overloaded). Google's problem, not the page's:
-    the attempt doesn't count; the reader waits, and if Google stays busy it
-    rests this model and uses the fallback for a while."""
+    """5xx from Google (503 = overloaded), or no answer within the timeout.
+    Google's problem, not the page's: the attempt doesn't count; the reader
+    waits, and if Google stays busy it rests this model and uses the fallback
+    for a while. (In the first real run, an overloaded model answered some
+    requests with 503 and simply never answered others: same cause.)"""
 
 
 class ReaderConfigError(VisionError):
@@ -221,15 +224,24 @@ class GeminiReader:
             # 400: something about this request (e.g. a picture it can't open).
             raise VisionError(f"Gemini refused the request ({err.code}): {err.message}") from err
         except errors.ServerError as err:
-            raise ServerBusy(f"Gemini's servers are busy ({err.code}); will retry") from err
-        except Exception as err:  # network down, timeout (httpx.ReadTimeout)...
-            raise VisionError(f"Couldn't reach Gemini ({type(err).__name__}): {err}") from err
+            raise ServerBusy(f"Gemini's servers are busy ({err.code})") from err
+        except httpx.TimeoutException as err:
+            raise ServerBusy(f"Gemini didn't answer within {REQUEST_TIMEOUT_MS // 1000} s") from err
+        except httpx.TransportError as err:  # no internet, Wi-Fi dropped, DNS failed
+            raise ServerBusy(f"Couldn't reach Gemini ({type(err).__name__})") from err
+        except Exception as err:
+            raise VisionError(f"Unexpected problem talking to Gemini ({type(err).__name__})") from err
 
         result = response.parsed
         if not isinstance(result, VisionResult):
             # Cut off (too long) or blocked: no usable JSON came back.
-            reason = response.candidates[0].finish_reason if response.candidates else "no answer"
-            raise VisionError(f"Gemini's answer wasn't usable ({reason})")
+            reason = str(response.candidates[0].finish_reason) if response.candidates else ""
+            # These reasons are shown to the student (the page's vision_error), so plain words.
+            if "MAX_TOKENS" in reason:
+                raise VisionError("Gemini's answer was too long and got cut off")
+            if any(r in reason for r in ("SAFETY", "BLOCKLIST", "PROHIBITED", "RECITATION")):
+                raise VisionError("Gemini refused to read this page")
+            raise VisionError("Gemini's answer couldn't be understood")
         return result
 
 
