@@ -7,6 +7,8 @@ import { api, ApiError, errorFromResponse } from "@/lib/api";
     uploadMaterial(courseId, f) POST   /api/courses/{id}/materials   (multipart)
     renameMaterial(id, title)   PATCH  /api/materials/{id}
     retryMaterial(id)           POST   /api/materials/{id}/retry
+    retryFailedPages(id)        POST   /api/materials/{id}/vision/retry
+    getVisionStatus()           GET    /api/vision/status     (is the image reader working?)
     deleteMaterial(id)          DELETE /api/materials/{id}
     listPages(id)               GET    /api/materials/{id}/pages
     getPage(id, n)              GET    /api/materials/{id}/pages/{n}
@@ -36,6 +38,9 @@ export type Material = {
   vision_failed_count: number;
 };
 
+/** smart = only pages with pictures go to the image reader; thorough = every page */
+export type ProcessingMode = "smart" | "thorough";
+
 /** What the image reader has done with a page (document_pages.vision_status). */
 export type VisionStatus = "none" | "pending" | "processing" | "done" | "failed";
 
@@ -48,6 +53,7 @@ export type PageSummary = {
   math_symbol_count: number;
   needs_vision: boolean;
   vision_status: VisionStatus;
+  vision_error: string | null;
   has_image: boolean;
   chunk_count: number;
 };
@@ -70,6 +76,24 @@ export type PageDetail = { page: PageSummary; chunks: Chunk[] };
 export const MAX_UPLOAD_MB = 50;
 
 export const isWorking = (m: Material) => m.status === "pending" || m.status === "processing";
+
+/** The text is searchable, but some page pictures are still waiting for the image reader. */
+export const isReadingPictures = (m: Material) => m.status === "ready" && m.vision_waiting_count > 0;
+
+/** GET /vision/status: matches VisionStatus in backend/app/schemas.py */
+export type ReaderStatus = {
+  status: "ok" | "paused" | "off" | "error";
+  message: string | null;
+  paused_until: string | null; // ISO time (UTC); shown in the student's local time
+};
+
+export function getVisionStatus() {
+  return api<ReaderStatus>("/vision/status");
+}
+
+export function retryFailedPages(id: string) {
+  return api<Material>(`/materials/${id}/vision/retry`, { method: "POST" });
+}
 
 export function listMaterials(courseId: string) {
   return api<Material[]>(`/courses/${courseId}/materials`);
@@ -119,6 +143,7 @@ export const pageImageUrl = (id: string, page: number) => `/api/materials/${id}/
 export function uploadMaterial(
   courseId: string,
   file: File,
+  mode: ProcessingMode,
   onProgress: (fraction: number) => void,
 ): { promise: Promise<Material>; abort: () => void } {
   const xhr = new XMLHttpRequest();
@@ -137,6 +162,7 @@ export function uploadMaterial(
 
     const form = new FormData();
     form.append("file", file); // "file" = the parameter name in upload_material()
+    form.append("mode", mode); // a second form field next to the file
     xhr.send(form);
   });
   return { promise, abort: () => xhr.abort() };

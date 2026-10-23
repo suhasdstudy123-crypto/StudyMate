@@ -10,6 +10,7 @@ Materials = uploaded PDFs inside a course.
   GET    /materials/{id}/pages/{n}/image       the page's picture (pages the image reader reads)
   PATCH  /materials/{id}                       rename (title)
   POST   /materials/{id}/retry                 try a failed file again
+  POST   /materials/{id}/vision/retry          read this file's failed picture pages again
   DELETE /materials/{id}                       delete file + its chunks
 
 Same ownership rule as courses: every query joins to courses and checks
@@ -32,6 +33,7 @@ from backend.app.config import MAX_PDF_PAGES, MAX_UPLOAD_MB
 from backend.app.database import get_db
 from backend.app.deps import get_current_user
 from backend.app.models import Course, DocumentChunk, DocumentPage, Material, User
+from backend.app.processing import vision_worker
 from backend.app.processing.worker import enqueue
 from backend.app.routers.courses import get_owned_course_or_404
 from backend.app.schemas import ChunkResponse, MaterialSummary, MaterialUpdate, PageDetail, PageSummary
@@ -263,7 +265,7 @@ def download_material(
 PAGES_SQL = """
     SELECT p.page_number, p.char_count, p.table_count, p.image_count,
            p.drawing_count, p.math_symbol_count, p.needs_vision,
-           p.vision_status, (p.image_path IS NOT NULL) AS has_image,
+           p.vision_status, p.vision_error, (p.image_path IS NOT NULL) AS has_image,
            count(dc.id) AS chunk_count
     FROM document_pages p
     LEFT JOIN document_chunks dc
@@ -368,6 +370,33 @@ def retry_material(
     db.commit()
     enqueue(material.id)
     return get_summary(db, material.id, current_user)
+
+
+@router.post(
+    "/materials/{material_id}/vision/retry",
+    response_model=MaterialSummary,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_failed_pages(
+    material_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pages the image reader gave up on (failed) go back in its queue with a
+    fresh set of attempts. Only failed pages: pages already read keep their passages."""
+    get_owned_material_or_404(db, material_id, current_user)
+    count = db.execute(
+        text(
+            "UPDATE document_pages SET vision_status = 'pending', vision_attempts = 0, vision_error = NULL "
+            "WHERE material_id = :id AND vision_status = 'failed'"
+        ),
+        {"id": material_id},
+    ).rowcount
+    if count == 0:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This file has no failed pages to retry.")
+    db.commit()
+    vision_worker.wake()
+    return get_summary(db, material_id, current_user)
 
 
 @router.delete("/materials/{material_id}", status_code=status.HTTP_204_NO_CONTENT)

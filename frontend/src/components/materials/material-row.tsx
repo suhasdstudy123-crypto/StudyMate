@@ -6,17 +6,18 @@ import {
   Check,
   ExternalLink,
   FileText,
-  ImageOff,
   Loader2,
+  PauseCircle,
   Pencil,
   RotateCw,
+  ScanEye,
   Trash2,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
 
 import { timeAgo } from "@/lib/courses";
-import { fileUrl, formatBytes, isWorking, type Material } from "@/lib/materials";
+import { fileUrl, formatBytes, isWorking, type Material, type ReaderStatus } from "@/lib/materials";
 import { cn } from "@/lib/utils";
 
 /*
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
     pending     stored; waiting for a free background worker  ("Queued")
     processing  a worker is reading it        ("Reading page 12 of 41")
     ready       searchable: page / chunk / table counts
+                + the image reader's progress on picture pages (Stage 5b)
     failed      the reason, and a Retry button
 
   The numbers come from the material_overview view (backend).
@@ -80,13 +82,15 @@ export function UploadRow({ item, onDismiss }: { item: UploadItem; onDismiss: ()
 
 type Props = {
   material: Material;
+  reader: ReaderStatus | null;
   onView: (m: Material) => void;
   onRename: (m: Material) => void;
   onRetry: (m: Material) => void;
+  onRetryPages: (m: Material) => void;
   onDelete: (m: Material) => void;
 };
 
-export function MaterialRow({ material: m, onView, onRename, onRetry, onDelete }: Props) {
+export function MaterialRow({ material: m, reader, onView, onRename, onRetry, onRetryPages, onDelete }: Props) {
   const working = isWorking(m);
   const pages = m.page_count ?? 0;
 
@@ -116,8 +120,9 @@ export function MaterialRow({ material: m, onView, onRename, onRetry, onDelete }
             {m.status === "ready" ? (
               <>
                 {pages} {pages === 1 ? "page" : "pages"} · {m.chunk_count} {m.chunk_count === 1 ? "passage" : "passages"}
-                {m.table_count > 0 && ` · ${m.table_count} ${m.table_count === 1 ? "table" : "tables"}`} ·{" "}
-                {formatBytes(m.file_size)} · added {timeAgo(m.created_at)}
+                {m.table_count > 0 && ` · ${m.table_count} ${m.table_count === 1 ? "table" : "tables"}`}
+                {m.processing_mode === "thorough" && " · Thorough"} · {formatBytes(m.file_size)} · added{" "}
+                {timeAgo(m.created_at)}
               </>
             ) : m.status === "failed" ? (
               <span className="font-medium text-destructive">{m.error_message}</span>
@@ -130,14 +135,7 @@ export function MaterialRow({ material: m, onView, onRename, onRetry, onDelete }
             )}
           </p>
 
-          {/* Honest note: what text extraction couldn't read */}
-          {m.status === "ready" && m.vision_page_count > 0 && (
-            <p className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-              <ImageOff className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-              {m.vision_page_count} {m.vision_page_count === 1 ? "page has" : "pages have"} pictures, diagrams or
-              screenshots StudyMate can&apos;t read yet. The rest of those pages is searchable.
-            </p>
-          )}
+          {m.status === "ready" && <PictureReading material={m} reader={reader} onRetryPages={() => onRetryPages(m)} />}
         </div>
 
         {/* Actions: always visible on touch, on hover/focus with a mouse */}
@@ -181,6 +179,95 @@ export function MaterialRow({ material: m, onView, onRename, onRetry, onDelete }
       {working && <Progress value={m.status === "processing" && pages ? m.pages_processed / pages : 0} indeterminate={m.status === "pending"} />}
     </motion.li>
   );
+}
+
+// ---------- the image reader's progress on this file's picture pages ----------
+
+/*
+  Honest about every state, because the student is waiting on it:
+    reading   "Reading pictures · 7 of 19 pages" + bar
+    paused    daily limit used up, or Google overloaded: says why and when it continues
+    off/error the server can't read pictures right now (not their file's fault)
+    failed    "2 pages couldn't be read" + Try again
+    done      "19 pages read from pictures"
+*/
+function PictureReading({
+  material: m,
+  reader,
+  onRetryPages,
+}: {
+  material: Material;
+  reader: ReaderStatus | null;
+  onRetryPages: () => void;
+}) {
+  const total = m.vision_waiting_count + m.vision_done_count + m.vision_failed_count;
+  if (total === 0) return null;
+  const note = "mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2.5 py-1.5 text-xs font-medium";
+
+  if (m.vision_waiting_count > 0) {
+    const stopped = reader && reader.status !== "ok";
+    return (
+      <div className="mt-2 grid max-w-md gap-1.5">
+        {/* flex-nowrap + items-start: a long message wraps NEXT TO its icon, not under it */}
+        <p className={cn(note, "mt-0 flex-nowrap items-start bg-muted", stopped ? "text-foreground" : "text-muted-foreground")}>
+          {stopped ? (
+            <PauseCircle className="mt-px size-3.5 shrink-0 text-primary" aria-hidden="true" />
+          ) : (
+            <Loader2 className="mt-px size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
+          )}
+          {stopped ? (
+            <span className="min-w-0">
+              {reader.status === "paused" ? (
+                // The server says why: daily limit used up, or Google overloaded
+                <>
+                  Reading pictures paused. {reader.message} Continues at{" "}
+                  <strong>{formatTime(reader.paused_until)}</strong>.
+                </>
+              ) : (
+                reader.message
+              )}{" "}
+              {m.vision_done_count} of {total} picture pages read so far; the rest of the text is searchable.
+            </span>
+          ) : (
+            <span>
+              Reading pictures · {m.vision_done_count} of {total} {total === 1 ? "page" : "pages"}
+            </span>
+          )}
+        </p>
+        {!stopped && <Progress value={m.vision_done_count / total} className="mt-0" />}
+      </div>
+    );
+  }
+
+  if (m.vision_failed_count > 0) {
+    return (
+      <p className={cn(note, "bg-destructive/8 text-foreground")}>
+        <AlertTriangle className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
+        {m.vision_failed_count} {m.vision_failed_count === 1 ? "page" : "pages"} couldn&apos;t be read from{" "}
+        {m.vision_failed_count === 1 ? "its picture" : "their pictures"}.
+        <button
+          type="button"
+          onClick={onRetryPages}
+          className="ml-1 inline-flex items-center gap-1 rounded-sm font-bold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RotateCw className="size-3" aria-hidden="true" /> Try again
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <p className={cn(note, "w-fit bg-primary/8 text-primary")}>
+      <ScanEye className="size-3.5 shrink-0" aria-hidden="true" />
+      {m.vision_done_count} {m.vision_done_count === 1 ? "page" : "pages"} read from pictures
+    </p>
+  );
+}
+
+/** "12:30 PM" in the student's own time zone (the server sends UTC). */
+function formatTime(iso: string | null): string {
+  if (!iso) return "the daily reset";
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 }
 
 // ---------- small pieces ----------
@@ -231,10 +318,18 @@ function FileIcon({ tone }: { tone: "ready" | "working" | "error" }) {
   );
 }
 
-function Progress({ value, indeterminate = false }: { value: number; indeterminate?: boolean }) {
+function Progress({
+  value,
+  indeterminate = false,
+  className,
+}: {
+  value: number;
+  indeterminate?: boolean;
+  className?: string;
+}) {
   return (
     <div
-      className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+      className={cn("mt-3 h-1.5 overflow-hidden rounded-full bg-muted", className)}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

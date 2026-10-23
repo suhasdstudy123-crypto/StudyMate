@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, ImageOff, Loader2, ScanEye, Table2, Workflow } from "lucide-react";
+import { AlertTriangle, ExternalLink, ImageOff, Loader2, ScanEye, Table2, Workflow } from "lucide-react";
 
 import { Dialog } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api";
@@ -50,8 +50,17 @@ function Viewer({ material }: { material: Material }) {
   const [current, setCurrent] = useState(1);
   const [detail, setDetail] = useState<PageDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Goes up every 5 s while the image reader is still working on this file,
+  // so both effects below fetch again and new passages appear by themselves.
+  const [tick, setTick] = useState(0);
+  const reading = pages?.some((p) => p.vision_status === "pending" || p.vision_status === "processing") ?? false;
+  useEffect(() => {
+    if (!reading) return;
+    const timer = setInterval(() => setTick((n) => n + 1), 5000);
+    return () => clearInterval(timer);
+  }, [reading]);
 
-  // The page list: once, when the viewer opens.
+  // The page list: when the viewer opens (and on each tick while reading).
   useEffect(() => {
     let alive = true;
     listPages(material.id)
@@ -60,9 +69,9 @@ function Viewer({ material }: { material: Material }) {
     return () => {
       alive = false;
     };
-  }, [material.id]);
+  }, [material.id, tick]);
 
-  // The selected page's passages: every time another page is picked.
+  // The selected page's passages: every time another page is picked (and on each tick).
   useEffect(() => {
     let alive = true;
     getPage(material.id, current)
@@ -71,7 +80,7 @@ function Viewer({ material }: { material: Material }) {
     return () => {
       alive = false;
     };
-  }, [material.id, current]);
+  }, [material.id, current, tick]);
 
   const loading = detail?.page.page_number !== current;
 
@@ -98,7 +107,7 @@ function Viewer({ material }: { material: Material }) {
                 <span className="tabular-nums">Page {p.page_number}</span>
                 <span className="ml-auto flex items-center gap-1 opacity-80">
                   {p.table_count > 0 && <Table2 className="size-3.5" aria-label="has a table" />}
-                  {p.needs_vision && <ImageOff className="size-3.5" aria-label="has pictures" />}
+                  <PageVisionIcon page={p} />
                 </span>
               </button>
             </li>
@@ -119,6 +128,22 @@ function Viewer({ material }: { material: Material }) {
       </section>
     </div>
   );
+}
+
+/* The page list's marker: what the image reader has done with the page. */
+function PageVisionIcon({ page }: { page: PageSummary }) {
+  switch (page.vision_status) {
+    case "done":
+      return <ScanEye className="size-3.5" aria-label="read from its picture" />;
+    case "processing":
+      return <Loader2 className="size-3.5 animate-spin" aria-label="being read" />;
+    case "failed":
+      return <AlertTriangle className="size-3.5 text-destructive" aria-label="couldn't be read" />;
+    case "pending":
+      return <ImageOff className="size-3.5" aria-label="picture waiting to be read" />;
+    default:
+      return null;
+  }
 }
 
 function PageView({ materialId, detail }: { materialId: string; detail: PageDetail }) {
@@ -164,7 +189,7 @@ function VisionNote({ page }: { page: PageSummary }) {
       "Text extraction can't see inside pictures, so only the text around them is below. The page is waiting for the image reader, which will read the picture below.",
     processing: "The image reader is reading the picture below right now.",
     done: "The image reader has read the picture below. Its passages are marked “Read from an image”: check them against the picture.",
-    failed: "The image reader couldn't read this page. You can try it again.",
+    failed: `The image reader couldn't read this page${page.vision_error ? ` (${page.vision_error})` : ""}. You can try it again from the file list.`,
   }[page.vision_status];
 
   return (
@@ -264,13 +289,44 @@ function ChunkCard({ chunk, position, total }: { chunk: Chunk; position: number;
         <MarkdownTable content={chunk.content} />
       ) : (
         <div className="grid gap-2.5 px-3.5 py-3 font-serif text-[0.95rem] leading-relaxed">
-          {chunk.content.split("\n\n").map((para, i) => (
-            <p key={i}>{para}</p>
-          ))}
+          {splitFences(chunk.content).map((block, i) =>
+            block.code !== null ? (
+              // A screenshot of SQL / a terminal: exact characters, monospace,
+              // line breaks and ASCII table borders kept; scrolls sideways if wide.
+              <pre key={i} className="overflow-x-auto rounded-md bg-muted px-3 py-2.5 font-mono text-[0.8rem] leading-snug">
+                {block.code}
+              </pre>
+            ) : (
+              // Image-reader text keeps its line breaks (diagram lists, formulas
+              // on their own line); text from the PDF flows as paragraphs.
+              <p key={i} className={cn(chunk.source === "vision" && "whitespace-pre-line")}>
+                {block.text}
+              </p>
+            ),
+          )}
         </div>
       )}
     </article>
   );
+}
+
+/*
+  Split text into paragraphs and ``` fenced code blocks (the image reader
+  puts screenshots of code/terminals in fences). Stage 7's chat gets a full
+  markdown renderer; this is enough for the viewer.
+*/
+function splitFences(content: string): { text: string | null; code: string | null }[] {
+  const out: { text: string | null; code: string | null }[] = [];
+  const parts = content.split(/```[a-zA-Z]*\n?/);
+  // split() alternates: outside fence, inside fence, outside, ...
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      if (part.trim()) out.push({ text: null, code: part.replace(/\n$/, "") });
+    } else {
+      for (const para of part.split("\n\n")) if (para.trim()) out.push({ text: para.trim(), code: null });
+    }
+  });
+  return out;
 }
 
 /*

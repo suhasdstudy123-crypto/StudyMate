@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import UPLOAD_DIR
 from backend.app.database import get_db
-from backend.app.processing import worker
+from backend.app.processing import vision_worker, worker
 from backend.app.routers.admin import router as admin_router
 from backend.app.routers.auth import router as auth_router
 from backend.app.routers.courses import router as courses_router
 from backend.app.routers.materials import router as materials_router
+from backend.app.routers.vision import router as vision_router
 
 # Our own log lines ("Processed material ...") in the server terminal.
 _handler = logging.StreamHandler()
@@ -34,10 +35,13 @@ async def lifespan(app: FastAPI):
     requeued = worker.requeue_unfinished()
     if requeued:
         _log.info("Re-queued %d unfinished file(s)", requeued)
+    # The image reader (Stage 5b): one thread reading picture pages via Gemini.
+    vision_worker.start()
 
     yield  # the server runs and answers requests here
 
     # ---- runs once when the server STOPS ---------------------------------
+    vision_worker.stop()
     worker.shutdown()
 
 
@@ -51,6 +55,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(materials_router)
+app.include_router(vision_router)
 app.include_router(admin_router)
 
 

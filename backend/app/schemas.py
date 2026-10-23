@@ -12,6 +12,7 @@ these rules gets a 422 error before our route code even runs.
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -181,6 +182,7 @@ class PageSummary(ORMSchema):
     math_symbol_count: int
     needs_vision: bool
     vision_status: str            # none | pending | processing | done | failed
+    vision_error: str | None = None  # why the image reader gave up (when failed)
     has_image: bool = False       # a page picture is saved (GET .../pages/{n}/image)
     chunk_count: int = 0
 
@@ -198,6 +200,13 @@ class ChunkResponse(ORMSchema):
 class PageDetail(BaseModel):
     page: PageSummary
     chunks: list[ChunkResponse]
+
+
+class VisionStatus(BaseModel):
+    # GET /vision/status: is the image reader (Gemini) working right now?
+    status: Literal["ok", "paused", "off", "error"]
+    message: str | None
+    paused_until: datetime | None   # when the daily quota resets (UTC); the browser shows local time
 
 
 # ------------------------------------------------------------------

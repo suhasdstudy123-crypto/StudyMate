@@ -14,7 +14,18 @@ import { Mascot } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { getCourse, type Course } from "@/lib/courses";
-import { isWorking, listMaterials, retryMaterial, uploadMaterial, type Material } from "@/lib/materials";
+import {
+  getVisionStatus,
+  isReadingPictures,
+  isWorking,
+  listMaterials,
+  retryFailedPages,
+  retryMaterial,
+  uploadMaterial,
+  type Material,
+  type ProcessingMode,
+  type ReaderStatus,
+} from "@/lib/materials";
 
 /*
   /courses/[id]: one course and its files.
@@ -26,11 +37,25 @@ import { isWorking, listMaterials, retryMaterial, uploadMaterial, type Material 
     2. backend answers 202 -> "Queued"          (row exists, status pending)
     3. a worker picks it   -> "Reading page 12 of 41"
     4. done                -> "Ready · 41 pages · 42 passages"
-  Steps 2-4 happen on the server; the browser asks again every 1.5 s while
-  any file is still pending/processing (POLLING) and stops when all are done.
+    5. picture pages       -> "Reading pictures · 7 of 19 pages"   (Stage 5b)
+  Steps 2-5 happen on the server; the browser asks again (POLLING) every
+  1.5 s while a file's text is being read, every 5 s while only pictures
+  are (that takes minutes, not seconds), and stops when all are done.
 */
 
 const POLL_MS = 1500;
+const PICTURE_POLL_MS = 5000;
+const MODE_KEY = "studymate:processing-mode";
+
+// The last Smart/Thorough choice, remembered in this browser only.
+// localStorage can throw (private mode, blocked storage): then just Smart.
+function savedMode(): ProcessingMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "thorough" ? "thorough" : "smart";
+  } catch {
+    return "smart";
+  }
+}
 
 type Load = { state: "loading" } | { state: "missing" } | { state: "error"; message: string } | { state: "ready" };
 
@@ -47,6 +72,25 @@ export default function CoursePage() {
   const [deleting, setDeleting] = useState<Material | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [mode, setMode] = useState<ProcessingMode>("smart");
+  const [reader, setReader] = useState<ReaderStatus | null>(null);
+
+  // Read the saved mode after the first render: localStorage doesn't exist on
+  // the server, so reading it during render would make server and browser
+  // HTML differ (a hydration mismatch).
+  useEffect(() => {
+    const saved = savedMode();
+    if (saved !== "smart") queueMicrotask(() => setMode(saved));
+  }, []);
+
+  function changeMode(next: ProcessingMode) {
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      /* not remembered; fine */
+    }
+  }
 
   // ---- First load: the course and its files, at the same time ----------
   useEffect(() => {
@@ -78,9 +122,11 @@ export default function CoursePage() {
   }, [materials]);
 
   const anyWorking = materials.some(isWorking);
+  const anyPictures = materials.some(isReadingPictures);
   useEffect(() => {
-    if (!anyWorking) return;
-    const timer = setInterval(() => {
+    if (!anyWorking && !anyPictures) return;
+    const tick = () => {
+      if (anyPictures) getVisionStatus().then(setReader).catch(() => {});
       listMaterials(id)
         .then((list) => {
           // Tell screen readers when a file finishes.
@@ -93,9 +139,11 @@ export default function CoursePage() {
           setMaterials(list);
         })
         .catch(() => {}); // a missed poll is fine; the next one tries again
-    }, POLL_MS);
+    };
+    if (anyPictures) tick(); // the reader's status at once, not after 5 s
+    const timer = setInterval(tick, anyWorking ? POLL_MS : PICTURE_POLL_MS);
     return () => clearInterval(timer); // stop when nothing is working or we leave the page
-  }, [anyWorking, id]);
+  }, [anyWorking, anyPictures, id]);
 
   // ---- Uploading --------------------------------------------------------
   const patchUpload = useCallback((key: string, patch: Partial<UploadItem>) => {
@@ -107,7 +155,7 @@ export default function CoursePage() {
     // One file at a time: simpler progress, and the server reads them in order anyway.
     for (const file of files) {
       const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`;
-      const { promise, abort } = uploadMaterial(id, file, (p) => patchUpload(key, { progress: p }));
+      const { promise, abort } = uploadMaterial(id, file, mode, (p) => patchUpload(key, { progress: p }));
       setUploads((list) => [...list, { key, name: file.name, size: file.size, progress: 0, error: null, abort }]);
       try {
         const created = await promise;
@@ -129,6 +177,15 @@ export default function CoursePage() {
       setMaterials((list) => list.map((x) => (x.id === updated.id ? updated : x)));
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "Couldn't retry.");
+    }
+  }
+
+  async function onRetryPages(m: Material) {
+    try {
+      const updated = await retryFailedPages(m.id);
+      setMaterials((list) => list.map((x) => (x.id === updated.id ? updated : x)));
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "Couldn't retry those pages.");
     }
   }
 
@@ -225,12 +282,12 @@ export default function CoursePage() {
                 StudyMate reads every page, keeps tables whole, and remembers which page each passage came from.
               </p>
             </div>
-            <UploadDropzone onFiles={startUploads} />
+            <UploadDropzone onFiles={startUploads} mode={mode} onModeChange={changeMode} />
           </div>
           <Mascot mood="happy" className="mx-auto hidden w-32 md:block" />
         </section>
       ) : (
-        <UploadDropzone onFiles={startUploads} compact />
+        <UploadDropzone onFiles={startUploads} mode={mode} onModeChange={changeMode} compact />
       )}
 
       {notice && (
@@ -257,9 +314,11 @@ export default function CoursePage() {
                 <MaterialRow
                   key={m.id}
                   material={m}
+                  reader={reader}
                   onView={setViewing}
                   onRename={setRenaming}
                   onRetry={onRetry}
+                  onRetryPages={onRetryPages}
                   onDelete={setDeleting}
                 />
               ))}

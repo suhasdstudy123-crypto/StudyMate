@@ -74,3 +74,24 @@ PROCESSING_WORKERS = int(os.getenv("PROCESSING_WORKERS", "2"))
 # this many pixels on the long side. 2000 px keeps the small text in
 # terminal screenshots sharp (about 210 KB per slide).
 PAGE_IMAGE_LONG_SIDE = int(os.getenv("PAGE_IMAGE_LONG_SIDE", "2000"))
+
+# --- Image reader: Google Gemini (Stage 5b) -----------------------------
+# Optional: without a key the app still works, picture pages just wait.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or None
+
+# Exact model names, never "-latest" aliases: an alias can switch to a new
+# model overnight and change the results without any change in our code.
+VISION_MODEL = os.getenv("VISION_MODEL", "gemini-3.8-flash")
+# Used when the main model's DAILY quota is used up (free tier: separate quota).
+VISION_FALLBACK_MODEL = os.getenv("VISION_FALLBACK_MODEL", "gemini-3.5-flash-lite") or None
+
+# Free-tier limits from AI Studio > Rate limit (per project, per model).
+# Requests are the bottleneck, not tokens, so several pages go in one request.
+VISION_MODEL_RPM = int(os.getenv("VISION_MODEL_RPM", "5"))
+VISION_MODEL_RPD = int(os.getenv("VISION_MODEL_RPD", "20"))
+VISION_FALLBACK_RPM = int(os.getenv("VISION_FALLBACK_RPM", "15"))
+VISION_FALLBACK_RPD = int(os.getenv("VISION_FALLBACK_RPD", "500"))
+VISION_PAGES_PER_REQUEST = int(os.getenv("VISION_PAGES_PER_REQUEST", "5"))
+
+# A page that fails this many times is marked failed (the student can retry it).
+VISION_MAX_ATTEMPTS = int(os.getenv("VISION_MAX_ATTEMPTS", "3"))

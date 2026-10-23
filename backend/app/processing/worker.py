@@ -39,6 +39,7 @@ from backend.app.database import SessionLocal
 from backend.app.models import DocumentChunk, DocumentPage, Material
 from backend.app.processing.chunking import chunk_page
 from backend.app.processing.extract import analyse_document, extract_page, is_heading
+from backend.app.processing import vision_worker
 from backend.app.processing.render import render_page_png
 from backend.app.storage import absolute_path, page_image_path, save_bytes
 
@@ -234,6 +235,7 @@ def save_page_images(material_id: UUID, doc: pymupdf.Document | None = None) -> 
                 )
                 db.commit()
             log.info("Saved %d page pictures for material %s", len(pages), material_id)
+            vision_worker.wake()  # the image reader can start on them now
         except Exception:
             # Not fatal: the text is already searchable. Logged, retried on next start.
             db.rollback()

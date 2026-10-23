@@ -59,3 +59,10 @@ A running log of frontend decisions and why they were made.
 - Pages the image reader reads show **the page picture** (exactly what the reader is sent), with a skeleton while loading and "Full size" to zoom into screenshot text. A plain `<img>`, not `next/image`: `next/image` downloads on the server without the login cookie.
 - A status note per page: waiting / being read / read / failed. Thorough-mode pages without pictures say so.
 - Passages written by the image reader carry a **"Read from an image — check it"** label (dashed outline in ink, not highlighter yellow: yellow is reserved for cited text). Diagram passages get their own icon.
+
+## Stage 5b — step 2: picture reading in the UI
+
+- **Smart / Thorough** picker under the upload box: real radio buttons in a `<fieldset>` styled as a switch (arrow keys, screen readers for free). Remembered in `localStorage` (read after the first render to avoid a hydration mismatch; wrapped in try/catch for blocked storage). Sent as a second form field `mode`.
+- **File row, picture reading:** "Reading pictures · 7 of 19 pages" + bar / paused ("today's free limit is used up. Continues at 12:30 PM", time from the server in UTC, shown with `Intl.DateTimeFormat` in local time) / off or setup problem / "N pages couldn't be read · Try again" / "19 pages read from pictures". The text is searchable meanwhile, and the row says so.
+- **Polling:** 1.5 s while a file's text is read, 5 s while only pictures are (that takes minutes), plus `GET /vision/status` on each tick.
+- **Viewer:** page-list icon per page status (waiting / being read / read / failed); refreshes every 5 s while pages are waiting (a `tick` counter in both effects' dependencies, so no loading flicker); failed pages show the reason; ``` blocks render as `<pre>` (exact characters, scrolls sideways on phones); image-reader text keeps its line breaks (`whitespace-pre-line`).
