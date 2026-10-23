@@ -139,7 +139,9 @@ function PageView({ detail }: { detail: PageDetail }) {
           No text on this page.
         </p>
       ) : (
-        chunks.map((chunk) => <ChunkCard key={chunk.id} chunk={chunk} />)
+        // Numbered within this page ("Passage 2 of 3"), not by the file-wide
+        // chunk_index, which reads oddly on page 26 ("Passage 31").
+        chunks.map((chunk, i) => <ChunkCard key={chunk.id} chunk={chunk} position={i + 1} total={chunks.length} />)
       )}
     </div>
   );
@@ -154,12 +156,12 @@ function describeVisuals(p: PageSummary): string {
   return parts.join(" and ");
 }
 
-function ChunkCard({ chunk }: { chunk: Chunk }) {
+function ChunkCard({ chunk, position, total }: { chunk: Chunk; position: number; total: number }) {
   return (
     <article className="rounded-md border bg-background">
       <header className="flex items-center gap-2 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
         {chunk.chunk_type === "table" ? <Table2 className="size-3.5" aria-hidden="true" /> : null}
-        Passage {chunk.chunk_index + 1}
+        Passage {position} of {total}
         {chunk.chunk_type === "table" && " · table"}
         <span className="ml-auto tabular-nums">~{chunk.token_count} tokens</span>
       </header>

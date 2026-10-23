@@ -88,6 +88,39 @@
     background: var(--highlighter);
     color: var(--highlighter-ink);
   }
+
+  /*
+    Scrollbars in the theme's ink instead of the browser's grey.
+    scrollbar-color is the standard property (Chrome, Edge, Firefox); it is
+    inherited, so setting it on <html> themes the page AND every inner
+    scroll area (dialogs, page lists). The thumb is the soft ink colour,
+    see-through so it never shouts; the track is transparent so the paper
+    shows behind it. Because it uses the tokens, dark mode follows by itself.
+  */
+  html {
+    scrollbar-color: color-mix(in oklab, var(--ink-soft) 45%, transparent) transparent;
+  }
+  /* Inner scroll areas get the thin version; the page keeps a normal one */
+  body * {
+    scrollbar-width: thin;
+  }
+}
+
+/* Safari doesn't support scrollbar-color yet: same look via its own pseudo-elements */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--ink-soft) 45%, transparent);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
 }
 
 /*
