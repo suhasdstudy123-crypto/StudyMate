@@ -29,7 +29,12 @@ function buildSteps(courses: Course[]) {
       done: hasCourse,
       href: "/courses",
     },
-    { title: "Upload a PDF", body: "Lecture notes, slides or a previous-year paper.", done: hasFile, href: null },
+    {
+      title: "Upload a PDF",
+      body: "Lecture notes, slides or a previous-year paper.",
+      done: hasFile,
+      href: hasCourse ? `/courses/${courses[0].id}` : "/courses",
+    },
     { title: "Ask your first question", body: "Get an answer with the exact page it came from.", done: false, href: null },
   ];
 }
@@ -173,7 +178,7 @@ function RecentCourses({ courses, total }: { courses: Course[]; total: number })
         {courses.map((c) => (
           <li key={c.id}>
             <Link
-              href="/courses"
+              href={`/courses/${c.id}`}
               className="flex h-full overflow-hidden rounded-md border bg-card outline-none transition-[transform,border-color] hover:-translate-y-0.5 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span aria-hidden="true" className="binding w-4 shrink-0 bg-primary" />

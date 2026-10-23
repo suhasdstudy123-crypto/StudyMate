@@ -50,20 +50,27 @@ export async function api<T>(path: string, options: { method?: string; body?: un
 
   const data = (await res.json().catch(() => ({}))) as ErrorBody & T;
   if (res.ok) return data as T;
+  throw errorFromResponse(res.status, data);
+}
 
+/*
+  Turns a failed response into an ApiError with a readable message.
+  Shared by api() above and by uploads (lib/materials.ts), which use
+  XMLHttpRequest instead of fetch to get upload progress.
+*/
+export function errorFromResponse(status: number, data: unknown): ApiError {
   // The forwarder answers 500 with no JSON when the backend isn't running
-  if (res.status >= 500) {
-    throw new ApiError(res.status, "StudyMate's server is having trouble. Try again in a moment.");
+  if (status >= 500) {
+    return new ApiError(status, "StudyMate's server is having trouble. Try again in a moment.");
   }
-
-  const detail = data.detail;
+  const detail = (data as ErrorBody | null)?.detail;
   if (Array.isArray(detail)) {
     const fieldErrors: Record<string, string> = {};
     for (const item of detail) {
       const field = String(item.loc?.at(-1) ?? "form");
       fieldErrors[field] ??= (item.msg ?? "Invalid value").replace(/^Value error, /, "");
     }
-    throw new ApiError(res.status, "Please fix the highlighted fields.", fieldErrors);
+    return new ApiError(status, "Please fix the highlighted fields.", fieldErrors);
   }
-  throw new ApiError(res.status, detail ?? "Something went wrong. Please try again.");
+  return new ApiError(status, detail ?? "Something went wrong. Please try again.");
 }

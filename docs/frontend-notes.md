@@ -39,3 +39,15 @@ A running log of frontend decisions and why they were made.
 ## Stage 5a — Uploads through the forwarder
 
 - **`experimental.proxyClientMaxBodySize: "60mb"` in `next.config.ts`.** Next.js reads at most 10 MB of a request body before forwarding it; a 35 MB PDF was cut off and the browser got a 500 ("socket hang up" in the Next terminal). 60 MB is a bit above the backend's 50 MB, so oversized files still get FastAPI's clear 413 message.
+
+## Stage 5a (part 2) — Course page, uploads, "What StudyMate read"
+
+- **`/courses/[id]`** is a dynamic route: one page file for every course; `useParams()` reads the id. 404 from the backend (not yours / doesn't exist) shows "Course not found".
+- **Course cards are links** with the *stretched link* pattern: the title's `<Link>` has an `::after` covering the card, edit/delete buttons sit above it (`relative z-10`). A button inside a link would be invalid HTML.
+- **Uploads use `XMLHttpRequest`, not `fetch`**, because only XHR reports upload progress (`xhr.upload.onprogress`). The body is `FormData`; the browser sets the multipart `Content-Type` (with its boundary) itself. `errorFromResponse()` in `lib/api.ts` is shared so XHR errors read the same as fetch errors. Uploads run one at a time; each can be cancelled (`xhr.abort()`).
+- **Checked in the browser first** (PDF? empty? > 50 MB?) for instant feedback; the backend checks again.
+- **Polling:** while any file is `pending`/`processing`, the page re-fetches the file list every 1.5 s, and stops when all are done or the page is left (cleanup clears the interval). A ref holds the latest list so the timer can announce "X is ready" to screen readers without restarting.
+- **One row component, five states:** uploading % → queued (sliding bar) → "Reading page x of y" → ready (pages · passages · tables) → failed (reason + Retry). Ready files with `vision_page_count > 0` say plainly how many pages have pictures StudyMate can't read yet.
+- **"What StudyMate read"** dialog: page list (table and picture markers) + that page's passages, exactly as stored. Text from notes in the serif font; table chunks parsed from markdown into a real `<table>`.
+- **Rename** (`PATCH /materials/{id}`) changes only the display title; delete is disabled while a file is being read (the backend would answer 409).
+- **Grid blowout fix:** a CSS grid column is never narrower than its widest content by default, so on phones the page and the viewer were wider than the screen. `grid-cols-1` / `minmax(0, 1fr)` lets the column shrink. On phones the file actions wrap onto their own line (no hover, so all are visible).

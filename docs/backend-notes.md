@@ -58,3 +58,4 @@ A running log of backend decisions and why they were made.
   - **Broken justified lines rejoined** (a line not ending a sentence + one starting lowercase), even if the first line looked like a heading.
   - **Bullets normalised** (● ❏ ■ ▪ → •).
   - Result: 19 pages flagged = all 17 slides with screenshots/diagrams/image tables + the title and thank-you slides (big logo, only 2 pages, so not "repeated"; accepted to avoid hiding a diagram repeated on a recap slide). All 22 text slides correctly not flagged. 42 chunks, ~1 per slide.
+- **`PATCH /materials/{id}`** renames a file (`title`, 1–255 characters, stripped before validation; blank → 422; someone else's file → 404). Only the display name changes; the stored file and its chunks are untouched.

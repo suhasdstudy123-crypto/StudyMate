@@ -161,6 +161,13 @@ class MaterialSummary(BaseModel):
     updated_at: datetime
 
 
+class MaterialUpdate(BaseModel):
+    # Rename a file ("UE24CS351A da2816aa-..." -> "Unit 3 - Transactions").
+    title: str = Field(min_length=1, max_length=255)
+
+    clean_title = field_validator("title", mode="before")(_clean_name)
+
+
 class PageSummary(ORMSchema):
     page_number: int
     char_count: int

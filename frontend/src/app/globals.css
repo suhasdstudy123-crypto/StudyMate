@@ -238,6 +238,15 @@
   background-position: center 0;
 }
 
+/* "Queued": a short bar sliding back and forth (no known percentage yet) */
+.progress-indeterminate {
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
 /* Respect "reduce motion": nothing moves on its own */
 @media (prefers-reduced-motion: reduce) {
   .highlight-sweep,
@@ -248,7 +257,8 @@
   .marquee,
   .caret,
   .dialog-pop[open],
-  .dialog-pop[open]::backdrop {
+  .dialog-pop[open]::backdrop,
+  .progress-indeterminate {
     animation: none;
   }
 }

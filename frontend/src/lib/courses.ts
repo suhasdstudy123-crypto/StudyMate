@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
   Each function is one HTTP request to the FastAPI courses router:
 
     listCourses()        GET    /api/courses
+    getCourse(id)        GET    /api/courses/{id}
     createCourse(data)   POST   /api/courses
     updateCourse(id, d)  PATCH  /api/courses/{id}
     deleteCourse(id)     DELETE /api/courses/{id}
@@ -37,6 +38,10 @@ export const COURSE_LIMITS = { name: 150, code: 50, description: 2000 } as const
 
 export function listCourses() {
   return api<Course[]>("/courses");
+}
+
+export function getCourse(id: string) {
+  return api<Course>(`/courses/${id}`);
 }
 
 export function createCourse(data: CourseInput) {

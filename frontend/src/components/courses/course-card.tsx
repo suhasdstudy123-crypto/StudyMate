@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FileText, Pencil, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -63,7 +64,7 @@ export function CourseCard({ course, index, isNew = false, onEdit, onDelete, ref
 
             {/* Edit / delete. On a mouse they appear on hover; on touch they're
                 always visible (there is no hover); keyboard focus shows them too. */}
-            <div className="-mt-1 -mr-2 flex gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
+            <div className="relative z-10 -mt-1 -mr-2 flex gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
               <IconButton label={`Edit ${course.name}`} onClick={() => onEdit(course)}>
                 <Pencil />
               </IconButton>
@@ -77,7 +78,16 @@ export function CourseCard({ course, index, isNew = false, onEdit, onDelete, ref
             id={`course-${course.id}`}
             className="mt-3 line-clamp-2 text-xl leading-7 font-extrabold tracking-tight break-words"
           >
-            {course.name}
+            {/* "Stretched link": the link's ::after covers the whole card, so a
+                click anywhere opens the course. The edit/delete buttons sit
+                above it (relative z-10), and a <button> inside a link would be
+                invalid HTML, which is why it's done this way round. */}
+            <Link
+              href={`/courses/${course.id}`}
+              className="rounded-sm outline-none after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {course.name}
+            </Link>
           </h2>
           {course.description ? (
             <p className="mt-1 line-clamp-2 font-serif text-[0.95rem] leading-7 text-muted-foreground">

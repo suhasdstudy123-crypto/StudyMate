@@ -7,6 +7,7 @@ Materials = uploaded PDFs inside a course.
   GET    /materials/{id}/file                  the PDF itself, to view it
   GET    /materials/{id}/pages                 what was found on each page
   GET    /materials/{id}/pages/{n}             the chunks of page n
+  PATCH  /materials/{id}                       rename (title)
   POST   /materials/{id}/retry                 try a failed file again
   DELETE /materials/{id}                       delete file + its chunks
 
@@ -31,7 +32,7 @@ from backend.app.deps import get_current_user
 from backend.app.models import Course, DocumentChunk, DocumentPage, Material, User
 from backend.app.processing.worker import enqueue
 from backend.app.routers.courses import get_owned_course_or_404
-from backend.app.schemas import ChunkResponse, MaterialSummary, PageDetail, PageSummary
+from backend.app.schemas import ChunkResponse, MaterialSummary, MaterialUpdate, PageDetail, PageSummary
 from backend.app.storage import (
     FileTooLarge,
     absolute_path,
@@ -300,6 +301,19 @@ def get_page(
 # ------------------------------------------------------------------
 # Changing
 # ------------------------------------------------------------------
+
+@router.patch("/materials/{material_id}", response_model=MaterialSummary)
+def rename_material(
+    material_id: UUID,
+    data: MaterialUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    material = get_owned_material_or_404(db, material_id, current_user)
+    material.title = data.title  # only the display name; the stored file is untouched
+    db.commit()
+    return get_summary(db, material.id, current_user)
+
 
 @router.post(
     "/materials/{material_id}/retry",
