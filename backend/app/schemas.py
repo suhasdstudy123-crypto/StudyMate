@@ -210,6 +210,33 @@ class VisionStatus(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Search (Stage 6): GET /courses/{id}/search?q=...
+# ------------------------------------------------------------------
+
+class SearchHit(BaseModel):
+    chunk_id: UUID
+    material_id: UUID
+    material_title: str
+    page_number: int
+    chunk_type: str                 # text | table | diagram
+    source: str                     # pdf_text | vision ("Read from an image")
+    content: str
+    score: float                    # Reciprocal Rank Fusion score: higher = better
+    meaning_rank: int | None        # position in the meaning (vector) list, None = not in it
+    keyword_rank: int | None        # position in the keyword list, None = not in it
+    similarity: float | None        # cosine similarity 0..1 to the question
+
+
+class SearchResponse(BaseModel):
+    query: str
+    # "hybrid" = meaning + keywords; "keywords" = the embedding model isn't
+    # ready (still loading / switched off), so only keyword search ran.
+    mode: Literal["hybrid", "keywords"]
+    took_ms: int
+    results: list[SearchHit]
+
+
+# ------------------------------------------------------------------
 # Chat (the RAG chat endpoint arrives in Stage 7)
 # ------------------------------------------------------------------
 

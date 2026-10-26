@@ -12,6 +12,7 @@ from backend.app.routers.admin import router as admin_router
 from backend.app.routers.auth import router as auth_router
 from backend.app.routers.courses import router as courses_router
 from backend.app.routers.materials import router as materials_router
+from backend.app.routers.search import router as search_router
 from backend.app.routers.vision import router as vision_router
 
 # Our own log lines ("Processed material ...") in the server terminal.
@@ -59,6 +60,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(materials_router)
+app.include_router(search_router)
 app.include_router(vision_router)
 app.include_router(admin_router)
 
