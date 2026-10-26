@@ -203,9 +203,9 @@ CREATE TABLE document_chunks (
     chunk_type  VARCHAR(10) NOT NULL DEFAULT 'text',
 
     -- Semantic meaning of `content`, produced by the embedding model.
-    -- 384 = output size of the model we'll use (MiniLM / bge-small family).
+    -- 1024 = output size of Qwen/Qwen3-Embedding-0.6B (migrations/004).
     -- NULL until the embedding step has run for this chunk.
-    embedding   VECTOR(384),
+    embedding   VECTOR(1024),
 
     -- Keyword-search version of `content`, maintained automatically by
     -- PostgreSQL (GENERATED ... STORED): words are normalised, so
@@ -216,6 +216,10 @@ CREATE TABLE document_chunks (
     -- HOW it was read: 'pdf_text' = exact, from the PDF's text layer;
     -- 'vision' = written by the image reader (added by migrations/003)
     source      VARCHAR(10) NOT NULL DEFAULT 'pdf_text',
+    -- WHICH model made `embedding` (added by migrations/004). Vectors from
+    -- different models can't be compared, so a model change re-embeds
+    -- exactly the rows made by the old one.
+    embedding_model VARCHAR(100),
 
     CONSTRAINT document_chunks_unique_index  UNIQUE (material_id, chunk_index),
     CONSTRAINT document_chunks_index_check   CHECK (chunk_index >= 0),
@@ -224,6 +228,9 @@ CREATE TABLE document_chunks (
     CONSTRAINT document_chunks_tokens_check  CHECK (token_count IS NULL OR token_count > 0),
     CONSTRAINT document_chunks_type_check    CHECK (chunk_type IN ('text', 'table', 'diagram')),
     CONSTRAINT document_chunks_source_check  CHECK (source IN ('pdf_text', 'vision')),
+    -- A vector and its model name are set together or not at all.
+    CONSTRAINT document_chunks_embedding_model_check
+        CHECK ((embedding IS NULL) = (embedding_model IS NULL)),
     -- COMPOSITE foreign key: the chunk's (file, page) pair must be a real page.
     CONSTRAINT document_chunks_page_fk FOREIGN KEY (material_id, page_number)
         REFERENCES document_pages(material_id, page_number) ON DELETE CASCADE
@@ -317,6 +324,11 @@ CREATE INDEX idx_chunks_content_tsv ON document_chunks USING GIN (content_tsv);
 -- vector_cosine_ops = we measure closeness with cosine distance (<=>).
 CREATE INDEX idx_chunks_embedding ON document_chunks
     USING hnsw (embedding vector_cosine_ops);
+
+-- The embedding worker's to-do list: partial index with only the passages
+-- that have no vector yet, so it stays tiny (migrations/004).
+CREATE INDEX idx_chunks_needs_embedding ON document_chunks (material_id)
+    WHERE embedding IS NULL;
 
 
 -- ============================================================
@@ -449,7 +461,7 @@ CROSS JOIN LATERAL (
 -- ============================================================
 
 CREATE FUNCTION search_chunks(
-    p_query     VECTOR(384),
+    p_query     VECTOR(1024),
     p_user_id   UUID,
     p_course_id UUID,
     p_k         INTEGER DEFAULT 5
