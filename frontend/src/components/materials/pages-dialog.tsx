@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, ImageOff, Loader2, RotateCw, ScanEye, Table2, Workflow } from "lucide-react";
 
 import { Dialog } from "@/components/ui/dialog";
@@ -25,20 +25,25 @@ import { cn } from "@/lib/utils";
     right: the passages (chunks) of the selected page, in order, and for
            pages the image reader reads, the page picture it is sent
 
-  This is the same text that search (Stage 6) and the chat (Stage 7) will
-  use, so it's the place to check that a PDF was read correctly.
+  This is the same text that search (Stage 6) and the chat (Stage 7)
+  use, so it's the place to check that a PDF was read correctly. Search
+  results open it at their page, with the found passage marked.
   Text from your notes is shown in the serif font, the app's rule for
   "this came from your documents".
 */
 type Props = {
   material: Material | null;
   onClose: () => void;
+  /** Open at this page (default 1), e.g. from a search result */
+  initialPage?: number;
+  /** Mark this passage and scroll to it (the search result that was clicked) */
+  focusChunkId?: string | null;
   // Tells the course page when this file changed here (failed pages retried),
   // so the file row updates at once instead of on the next page load.
   onChanged: (m: Material) => void;
 };
 
-export function PagesDialog({ material, onClose, onChanged }: Props) {
+export function PagesDialog({ material, onClose, onChanged, initialPage = 1, focusChunkId = null }: Props) {
   return (
     <Dialog
       open={material !== null}
@@ -47,14 +52,34 @@ export function PagesDialog({ material, onClose, onChanged }: Props) {
       description={material ? <span className="font-semibold text-foreground">{material.title}</span> : null}
       className="max-w-5xl"
     >
-      {material && <Viewer key={material.id} material={material} onChanged={onChanged} />}
+      {material && (
+        // key: opening another file, or the same file at another page, starts a fresh viewer
+        <Viewer
+          key={`${material.id}-${initialPage}-${focusChunkId ?? ""}`}
+          material={material}
+          onChanged={onChanged}
+          initialPage={initialPage}
+          focusChunkId={focusChunkId}
+        />
+      )}
     </Dialog>
   );
 }
 
-function Viewer({ material, onChanged }: { material: Material; onChanged: (m: Material) => void }) {
+function Viewer({
+  material,
+  onChanged,
+  initialPage,
+  focusChunkId,
+}: {
+  material: Material;
+  onChanged: (m: Material) => void;
+  initialPage: number;
+  focusChunkId: string | null;
+}) {
   const [pages, setPages] = useState<PageSummary[] | null>(null);
-  const [current, setCurrent] = useState(1);
+  const [current, setCurrent] = useState(initialPage);
+  const listRef = useRef<HTMLOListElement>(null);
   const [detail, setDetail] = useState<PageDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Goes up every 5 s while the image reader is still working on this file,
@@ -91,12 +116,20 @@ function Viewer({ material, onChanged }: { material: Material; onChanged: (m: Ma
 
   const loading = detail?.page.page_number !== current;
 
+  // Opened at page 24 (from search): scroll the page list so "Page 24" is
+  // visible, instead of leaving it at the top with page 1.
+  const listReady = pages !== null;
+  useEffect(() => {
+    if (!listReady) return;
+    listRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [listReady]);
+
   return (
     // minmax(0, 1fr): the long strip of page buttons must not widen the grid (phones)
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-6">
       {/* Page list: a column on wide screens, a scrolling strip on phones */}
       <nav aria-label="Pages" className="-mx-1 md:mx-0">
-        <ol className="flex gap-1.5 overflow-x-auto px-1 pb-2 md:max-h-[60vh] md:flex-col md:overflow-y-auto md:pr-2 md:pb-0">
+        <ol ref={listRef} className="flex gap-1.5 overflow-x-auto px-1 pb-2 md:max-h-[60vh] md:flex-col md:overflow-y-auto md:pr-2 md:pb-0">
           {(pages ?? []).map((p) => (
             <li key={p.page_number} className="shrink-0">
               <button
@@ -133,6 +166,7 @@ function Viewer({ material, onChanged }: { material: Material; onChanged: (m: Ma
           <PageView
             materialId={material.id}
             detail={detail}
+            focusChunkId={focusChunkId}
             onRetry={async () => {
               const updated = await retryFailedPages(material.id);
               onChanged(updated);
@@ -164,13 +198,18 @@ function PageVisionIcon({ page }: { page: PageSummary }) {
 function PageView({
   materialId,
   detail,
+  focusChunkId,
   onRetry,
 }: {
   materialId: string;
   detail: PageDetail;
+  focusChunkId: string | null;
   onRetry: () => Promise<void>;
 }) {
   const { page, chunks } = detail;
+  // The page picture loads AFTER the passages appear and pushes them down,
+  // so the marked passage scrolls into view again once the picture is in.
+  const [pictureLoaded, setPictureLoaded] = useState(false);
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
@@ -182,7 +221,12 @@ function PageView({
 
       {page.has_image && (
         // key: a new page = a new <img>, so the "loading" state starts over
-        <PagePicture key={page.page_number} src={pageImageUrl(materialId, page.page_number)} page={page.page_number} />
+        <PagePicture
+          key={page.page_number}
+          src={pageImageUrl(materialId, page.page_number)}
+          page={page.page_number}
+          onLoaded={() => setPictureLoaded(true)}
+        />
       )}
 
       {chunks.length === 0 ? (
@@ -192,7 +236,16 @@ function PageView({
       ) : (
         // Numbered within this page ("Passage 2 of 3"), not by the file-wide
         // chunk_index, which reads oddly on page 26 ("Passage 31").
-        chunks.map((chunk, i) => <ChunkCard key={chunk.id} chunk={chunk} position={i + 1} total={chunks.length} />)
+        chunks.map((chunk, i) => (
+          <ChunkCard
+            key={chunk.id}
+            chunk={chunk}
+            position={i + 1}
+            total={chunks.length}
+            focused={chunk.id === focusChunkId}
+            layoutKey={pictureLoaded}
+          />
+        ))
       )}
     </div>
   );
@@ -273,7 +326,7 @@ function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promi
   the SERVER, without the student's login cookie, and get a 401.
   Click = full size in a new tab, to zoom into small screenshot text.
 */
-function PagePicture({ src, page }: { src: string; page: number }) {
+function PagePicture({ src, page, onLoaded }: { src: string; page: number; onLoaded?: () => void }) {
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
 
   if (state === "error") {
@@ -299,7 +352,10 @@ function PagePicture({ src, page }: { src: string; page: number }) {
         <img
           src={src}
           alt={`Page ${page} of the PDF, as a picture`}
-          onLoad={() => setState("loaded")}
+          onLoad={() => {
+            setState("loaded");
+            onLoaded?.();
+          }}
           onError={() => setState("error")}
           className="relative block h-auto w-full"
         />
@@ -323,14 +379,42 @@ function describeVisuals(p: PageSummary): string {
   return parts.join(" and ");
 }
 
-function ChunkCard({ chunk, position, total }: { chunk: Chunk; position: number; total: number }) {
+function ChunkCard({
+  chunk,
+  position,
+  total,
+  focused = false,
+  layoutKey,
+}: {
+  chunk: Chunk;
+  position: number;
+  total: number;
+  focused?: boolean;
+  /** changes when something above moved this card (the picture loaded) */
+  layoutKey?: unknown;
+}) {
+  // The passage the student clicked in search: scroll it into view, and
+  // again if the page picture above it finishes loading and pushes it down.
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ block: "center" });
+  }, [focused, layoutKey]);
+
   return (
-    <article className="rounded-md border bg-background">
+    <article
+      ref={ref}
+      className={cn("rounded-md border bg-background", focused && "border-primary ring-2 ring-primary/25")}
+    >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
         {chunk.chunk_type === "table" && <Table2 className="size-3.5" aria-hidden="true" />}
         {chunk.chunk_type === "diagram" && <Workflow className="size-3.5" aria-hidden="true" />}
         Passage {position} of {total}
         {chunk.chunk_type !== "text" && ` · ${chunk.chunk_type}`}
+        {focused && (
+          <span className="inline-flex items-center rounded-sm bg-primary px-1.5 py-px text-primary-foreground">
+            From your search
+          </span>
+        )}
         {chunk.source === "vision" && (
           // The honest label: this text was written by the image reader, not copied from the PDF.
           // Dashed outline, not highlighter yellow: yellow is reserved for cited text.
@@ -371,7 +455,7 @@ function ChunkCard({ chunk, position, total }: { chunk: Chunk; position: number;
   puts screenshots of code/terminals in fences). Stage 7's chat gets a full
   markdown renderer; this is enough for the viewer.
 */
-function splitFences(content: string): { text: string | null; code: string | null }[] {
+export function splitFences(content: string): { text: string | null; code: string | null }[] {
   const out: { text: string | null; code: string | null }[] = [];
   const parts = content.split(/```[a-zA-Z]*\n?/);
   // split() alternates: outside fence, inside fence, outside, ...
@@ -394,7 +478,7 @@ function splitFences(content: string): { text: string | null; code: string | nul
   A tiny parser turns that into a real <table>. (The chat in Stage 7 gets a
   full markdown renderer; this is enough for tables.)
 */
-function MarkdownTable({ content }: { content: string }) {
+export function MarkdownTable({ content }: { content: string }) {
   const lines = content.split("\n");
   const firstRow = lines.findIndex((l) => l.trim().startsWith("|"));
   const caption = lines.slice(0, Math.max(firstRow, 0)).join(" ").trim();

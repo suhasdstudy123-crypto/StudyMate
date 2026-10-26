@@ -9,11 +9,13 @@ import { AnimatePresence, motion } from "motion/react";
 import { MaterialRow, UploadRow, type UploadItem } from "@/components/materials/material-row";
 import { DeleteMaterialDialog, RenameMaterialDialog } from "@/components/materials/material-dialogs";
 import { PagesDialog } from "@/components/materials/pages-dialog";
+import { SearchPanel } from "@/components/search/search-panel";
 import { UploadDropzone } from "@/components/materials/upload-dropzone";
 import { Mascot } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { getCourse, type Course } from "@/lib/courses";
+import type { SearchHit } from "@/lib/search";
 import {
   getVisionStatus,
   isReadingPictures,
@@ -38,6 +40,7 @@ import {
     3. a worker picks it   -> "Reading page 12 of 41"
     4. done                -> "Ready · 41 pages · 42 passages"
     5. picture pages       -> "Reading pictures · 7 of 19 pages"   (Stage 5b)
+    6. searchable          -> "Search your notes" appears above the files (Stage 6)
   Steps 2-5 happen on the server; the browser asks again (POLLING) every
   1.5 s while a file's text is being read, every 5 s while only pictures
   are (that takes minutes, not seconds), and stops when all are done.
@@ -68,6 +71,8 @@ export default function CoursePage() {
 
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [viewing, setViewing] = useState<Material | null>(null);
+  // Where the viewer opens: page 1 from a file row, the result's page from search.
+  const [viewAt, setViewAt] = useState<{ page: number; chunkId: string | null }>({ page: 1, chunkId: null });
   const [renaming, setRenaming] = useState<Material | null>(null);
   const [deleting, setDeleting] = useState<Material | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -189,6 +194,18 @@ export default function CoursePage() {
     }
   }
 
+  function openFile(m: Material) {
+    setViewAt({ page: 1, chunkId: null });
+    setViewing(m);
+  }
+
+  function openSearchHit(hit: SearchHit) {
+    const m = materials.find((x) => x.id === hit.material_id);
+    if (!m) return; // deleted meanwhile
+    setViewAt({ page: hit.page_number, chunkId: hit.chunk_id });
+    setViewing(m);
+  }
+
   // ---- Numbers for the header -----------------------------------------
   const stats = useMemo(() => {
     const ready = materials.filter((m) => m.status === "ready");
@@ -273,6 +290,8 @@ export default function CoursePage() {
         {announcement}
       </p>
 
+      {stats.passages > 0 && <SearchPanel courseId={id} passages={stats.passages} onOpenPage={openSearchHit} />}
+
       {empty ? (
         <section className="grid items-center gap-6 rounded-lg border bg-card p-6 sm:p-8 md:grid-cols-[1fr_auto]">
           <div className="grid gap-5">
@@ -315,7 +334,7 @@ export default function CoursePage() {
                   key={m.id}
                   material={m}
                   reader={reader}
-                  onView={setViewing}
+                  onView={openFile}
                   onRename={setRenaming}
                   onRetry={onRetry}
                   onRetryPages={onRetryPages}
@@ -329,6 +348,8 @@ export default function CoursePage() {
 
       <PagesDialog
         material={viewing}
+        initialPage={viewAt.page}
+        focusChunkId={viewAt.chunkId}
         onClose={() => setViewing(null)}
         onChanged={(updated) => setMaterials((list) => list.map((m) => (m.id === updated.id ? updated : m)))}
       />
