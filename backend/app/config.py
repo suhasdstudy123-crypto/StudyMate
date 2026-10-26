@@ -95,3 +95,16 @@ VISION_PAGES_PER_REQUEST = int(os.getenv("VISION_PAGES_PER_REQUEST", "5"))
 
 # A page that fails this many times is marked failed (the student can retry it).
 VISION_MAX_ATTEMPTS = int(os.getenv("VISION_MAX_ATTEMPTS", "3"))
+
+# --- Embeddings: local model (Stage 6) ----------------------------------
+# Turns every passage (and every question) into 1024 numbers for meaning
+# search. Runs inside the backend, on the GPU if there is one, else the CPU.
+# Must output EMBEDDING_DIM numbers (models.py / VECTOR(1024) in schema.sql).
+# Changing the model: every vector made by the old one is redone on startup.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+# "auto" = GPU (cuda) if PyTorch sees one, otherwise CPU. Or force "cpu" / "cuda".
+EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "auto").lower()
+# Passages embedded per step. Lower it if the GPU runs out of memory.
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "16"))
+# "false" = don't load the model (saves ~2.5 GB memory; meaning search is off).
+EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"

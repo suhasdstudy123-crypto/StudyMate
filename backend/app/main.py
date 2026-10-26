@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import UPLOAD_DIR
 from backend.app.database import get_db
-from backend.app.processing import vision_worker, worker
+from backend.app.processing import embed_worker, vision_worker, worker
 from backend.app.routers.admin import router as admin_router
 from backend.app.routers.auth import router as auth_router
 from backend.app.routers.courses import router as courses_router
@@ -37,10 +37,14 @@ async def lifespan(app: FastAPI):
         _log.info("Re-queued %d unfinished file(s)", requeued)
     # The image reader (Stage 5b): one thread reading picture pages via Gemini.
     vision_worker.start()
+    # The embedding worker (Stage 6): loads the model in the background,
+    # then gives every passage without a vector its 1024 numbers.
+    embed_worker.start()
 
     yield  # the server runs and answers requests here
 
     # ---- runs once when the server STOPS ---------------------------------
+    embed_worker.stop()
     vision_worker.stop()
     worker.shutdown()
 
@@ -48,7 +52,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="StudyMate API",
     description="Backend API for StudyMate: upload study material, ask questions, get answers from your own notes.",
-    version="0.5.0",
+    version="0.6.0",
     lifespan=lifespan,
 )
 

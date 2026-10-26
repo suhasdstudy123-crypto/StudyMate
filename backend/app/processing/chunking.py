@@ -41,9 +41,9 @@ class Chunk:
 
 
 def estimate_tokens(text: str) -> int:
-    # Approximate: words + punctuation marks. The real count depends on the
-    # embedding model's tokenizer (Stage 6); this is close enough to compare
-    # chunk sizes and spot outliers.
+    # Approximate: words + punctuation marks. Stored when the passage is
+    # created; the embedding worker (Stage 6) replaces it with the real
+    # count from the embedding model's own tokenizer.
     return max(1, len(TOKEN.findall(text)))
 
 

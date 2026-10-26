@@ -38,6 +38,7 @@ from backend.app.config import (
     VISION_PAGES_PER_REQUEST,
 )
 from backend.app.database import SessionLocal
+from backend.app.processing import embed_worker
 from backend.app.processing.rate_limit import ModelLimiter
 from backend.app.processing.vision import (
     GeminiReader,
@@ -223,6 +224,8 @@ def save_results(material_id: UUID, pages: list[ClaimedPage], result: VisionResu
         )
         db.commit()
     log.info("Read %d page(s) of %s with %s: %d passages", len(done), material_id, model, len(rows))
+    if rows:
+        embed_worker.wake()  # the new picture passages need vectors too
     return [p for p in pages if p.page_number not in answers]
 
 

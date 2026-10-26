@@ -39,7 +39,7 @@ from backend.app.database import SessionLocal
 from backend.app.models import DocumentChunk, DocumentPage, Material
 from backend.app.processing.chunking import chunk_page
 from backend.app.processing.extract import analyse_document, extract_page, is_heading
-from backend.app.processing import vision_worker
+from backend.app.processing import embed_worker, vision_worker
 from backend.app.processing.render import render_page_png
 from backend.app.storage import absolute_path, page_image_path, save_bytes
 
@@ -167,6 +167,7 @@ def process_material(material_id: UUID) -> None:
         )
         work.commit()
         log.info("Processed material %s: %d pages, %d chunks", material_id, doc.page_count, chunk_index)
+        embed_worker.wake()  # its passages are committed: make them searchable
 
         # The text is searchable now. Pictures come after, OUTSIDE the
         # transaction above: a picture that fails to save must not undo
