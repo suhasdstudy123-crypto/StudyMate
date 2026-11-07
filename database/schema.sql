@@ -336,7 +336,7 @@ FROM users u;
 CREATE FUNCTION search_chunks(
     p_query     VECTOR(384),
     p_user_id   UUID,
-    p_course_id UUID,
+    p_course_id UUID DEFAULT NULL,
     p_k         INTEGER DEFAULT 5
 )
 RETURNS TABLE (
@@ -345,6 +345,8 @@ RETURNS TABLE (
     material_title VARCHAR,
     page_number    INTEGER,
     content        TEXT,
+    chunk_type     VARCHAR,
+    source         VARCHAR,
     similarity     DOUBLE PRECISION
 )
 LANGUAGE sql STABLE AS $$
@@ -354,11 +356,13 @@ LANGUAGE sql STABLE AS $$
         m.title,
         dc.page_number,
         dc.content,
-        1 - (dc.embedding <=> p_query)
+        dc.chunk_type,
+        dc.source,
+        (1 - (dc.embedding <=> p_query))::DOUBLE PRECISION AS similarity
     FROM document_chunks dc
     JOIN materials m ON m.id = dc.material_id
     JOIN courses   c ON c.id = m.course_id
-    WHERE c.id      = p_course_id
+    WHERE (p_course_id IS NULL OR c.id = p_course_id)
       AND c.user_id = p_user_id
       AND m.status  = 'ready'
       AND dc.embedding IS NOT NULL

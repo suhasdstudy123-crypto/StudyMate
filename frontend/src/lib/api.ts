@@ -30,6 +30,31 @@ export class ApiError extends Error {
 //   { "detail": [{ "loc": ["body","email"], "msg": "..." }, ...] } (422 validation)
 type ErrorBody = { detail?: string | { loc?: (string | number)[]; msg?: string }[] };
 
+export function errorFromResponse(status: number, response: unknown): ApiError {
+  if (status >= 500) {
+    return new ApiError(status, "StudyMate's server is having trouble. Try again in a moment.");
+  }
+  let detail: string | { loc?: (string | number)[]; msg?: string }[] | undefined;
+  if (typeof response === "string") {
+    try {
+      detail = (JSON.parse(response) as ErrorBody).detail;
+    } catch {
+      detail = response;
+    }
+  } else if (response && typeof response === "object" && "detail" in response) {
+    detail = (response as ErrorBody).detail;
+  }
+  if (Array.isArray(detail)) {
+    const fieldErrors: Record<string, string> = {};
+    for (const item of detail) {
+      const field = String(item.loc?.at(-1) ?? "form");
+      fieldErrors[field] ??= (item.msg ?? "Invalid value").replace(/^Value error, /, "");
+    }
+    return new ApiError(status, "Please fix the highlighted fields.", fieldErrors);
+  }
+  return new ApiError(status, typeof detail === "string" ? detail : "Something went wrong. Please try again.");
+}
+
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   let res: Response;
   try {

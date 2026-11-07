@@ -23,3 +23,116 @@ A running log of backend decisions and why they were made.
 - **401 vs 403 vs 404:** 401 = not logged in / bad token; 403 = logged in but not allowed (student on `/admin/*`); 404 for another user's course, so its existence isn't revealed.
 - **Courses take the owner from the token**, never from the request body. `/courses/user/{user_id}` was removed; `GET /courses` returns your own.
 - Settings and `.env` loading moved from `database.py` to `config.py`; the app refuses to start without `DATABASE_URL` or a `JWT_SECRET_KEY` of at least 32 characters.
+
+## Stage 4 — Courses on real data
+
+- **Course names are unique per student, ignoring case.** `UNIQUE (user_id, name)` allowed both "DBMS" and "dbms". It was replaced by a unique *expression index* `ON courses (user_id, lower(name))`. Different students can still both have "DBMS".
+- **First migration file: `database/migrations/001_course_names_case_insensitive.sql`.** `schema.sql` starts with a DEV RESET that drops every table, so it can't be re-run on a database with data. A migration changes only what's needed and keeps the data. It runs inside `BEGIN ... COMMIT`: PostgreSQL can roll back schema changes too, so a failure leaves the old constraint in place. `schema.sql` was updated too, so a fresh database ends up identical.
+- **Reading courses uses the `course_overview` VIEW with plain SQL** (`sqlalchemy.text`). Every endpoint returns a `CourseSummary` with `material_count`, `ready_material_count`, `chunk_count` and `last_activity`, so the cards show live numbers. Values are passed as **bind parameters** (`:user_id`), never pasted into the SQL string, so there's no SQL injection. Writing still goes through the ORM model.
+- **Validation bug fixed.** `{"name": "   "}` passed `min_length=1` and was then rejected by the database CHECK, which came back as a wrong "duplicate name" 409. Now names are stripped *before* validation (`mode="before"`), so blank names get a clear 422. `{"name": null}` on PATCH is also a 422. Empty code/description become `NULL`.
+- `GET /courses` is ordered by most recent activity.
+- **Known for Stage 5:** deleting a course cascades to materials/chunks in the database, but uploaded files on disk must also be removed then.
+
+## Stage 5a (part 1) — Upload and reading PDFs
+
+- **Migration 002** adds `materials.pages_processed` (progress), the `document_pages` table (one row per page, composite primary key `(material_id, page_number)`), `document_chunks.chunk_type` (`text`/`table`), a **composite foreign key** chunk → page, a **partial index** on pages that need the image reader, and the `material_overview` view. Re-running it fails and rolls back (nothing changes).
+- **PDF library: PyMuPDF 1.28.2.** It does text, tables, images, drawings and page rendering (needed in 5b) in one library. Licence is AGPL, which is fine for a public open-source repo; a closed-source product would need a commercial licence or another library. 2.0 was 3 days old, so the last 1.x release is pinned. `python-multipart` is what lets FastAPI read file uploads (multipart/form-data).
+- **Upload checks, in order:** owner of the course (404) → size while copying (413, `MAX_UPLOAD_MB`) → empty (422) → starts with `%PDF-` (415; the file name and browser type are not trusted) → opens in PyMuPDF (422 damaged) → not password-protected (422) → 1..`MAX_PDF_PAGES` pages (422) → same SHA-256 already in this course (409, the UNIQUE constraint is the final guard).
+- **Files on disk:** `backend/uploads/<user id>/<material id>.pdf` (gitignored). The student's file name is never part of a path (path traversal). The database stores only the relative path.
+- **File + row consistency:** a database transaction can't undo a file write. So: move the file into place, then commit the row; if the commit fails, delete the file (compensating action). On delete: commit the row deletion first, then remove the file. Deleting a course now removes its files too.
+- **Background processing:** a `ThreadPoolExecutor` (2 workers) inside the backend. Upload answers `202 Accepted` at once; the browser polls `GET /materials/{id}`. Jobs live in memory, so on startup (FastAPI **lifespan**) unfinished files are re-queued and leftover `.part` files removed.
+- **Two sessions in the worker:** `work` = one transaction for all pages + chunks, committed once at the end (atomic: a crash leaves nothing half-done); `progress` = a tiny commit per page so the browser sees "page 12 of 40". Tested: another connection sees progress rising but 0 chunks until the final commit (isolation, READ COMMITTED). Killing the server at page 124 left 0 chunks; restart re-queued it and finished cleanly.
+- **No deadlock between the two sessions:** inserting a page takes a `FOR KEY SHARE` lock on the materials row (foreign key check); the progress UPDATE only changes non-key columns, which needs `FOR NO KEY UPDATE`. PostgreSQL designed these two lock modes to be compatible.
+- **Claiming a job** is a conditional `UPDATE ... WHERE status = 'pending' RETURNING`: only one worker can win the row.
+- **A failed file stores no pages or chunks**, only `error_message` (deleted in the same transaction that marks it failed). Retry: `failed → pending`.
+- **Delete while processing → 409** (the worker's transaction holds the row).
+- **Extraction (`processing/extract.py`):** blocks sorted into reading order; repeated headers/footers (same text in the top/bottom 8% of ≥40% of pages, numbers ignored) and bare page numbers dropped; tables via `find_tables()` → markdown, kept whole, with the latest heading on top; text inside a table's area skipped (otherwise read twice); NUL/control characters removed (PostgreSQL TEXT can't store `\x00`).
+- **needs_vision (for 5b):** embedded images, ≥3 drawings outside tables (diagrams), ≥3 maths symbols, or very little text plus a drawing. Table grid lines don't count as drawings.
+- **Chunking (`processing/chunking.py`):** never across pages (exact page citations), ~900 characters, new chunk at headings, tables one chunk, one-sentence overlap between text chunks, tiny leftovers merged. `token_count` is an estimate until Stage 6 uses the real tokenizer.
+- **Speed (sandbox):** a 300-page text PDF took ~27 s (≈90 ms per page, mostly table detection).
+- **Tuned on a real lecture deck** (41 PES DBMS slides, made with Online2PDF). The first version flagged all 41 pages for the image reader and kept the slide header in every chunk. Fixes:
+  - **Images actually drawn** (`get_image_info`), not every image a page *references* (this PDF attaches 107 to each page).
+  - **Repeated things are decoration**, found in a first pass over the whole PDF: text in the top/bottom 12% on ≥40% of pages (header "Database Management Systems"), the same image or an image at the same spot on ≥40% of pages (logo), the same drawing at the same place (line under each title).
+  - **Invisible drawings ignored:** white or unfilled shapes with no outline (text-box backgrounds), page-sized backgrounds.
+  - **Page number as the last line of a block** is stripped.
+  - **Broken justified lines rejoined** (a line not ending a sentence + one starting lowercase), even if the first line looked like a heading.
+  - **Bullets normalised** (● ❏ ■ ▪ → •).
+  - Result: 19 pages flagged = all 17 slides with screenshots/diagrams/image tables + the title and thank-you slides (big logo, only 2 pages, so not "repeated"; accepted to avoid hiding a diagram repeated on a recap slide). All 22 text slides correctly not flagged. 42 chunks, ~1 per slide.
+- **`PATCH /materials/{id}`** renames a file (`title`, 1–255 characters, stripped before validation; blank → 422; someone else's file → 404). Only the display name changes; the stored file and its chunks are untouched.
+
+## Stage 5b — Reading pages as images (step 1: decisions + page pictures)
+
+- **Provider: Google Gemini API** (one key, `GEMINI_API_KEY`). Compared in Oct 2026 against Groq and Mistral. Gemini read slides/screenshots/tables most accurately (Roboflow vision evals: 3.8 Flash #7/63, transcription 94%; Gemini 3 Flash #1 on OmniDocBench). Groq: most private (no retention) but 8K tokens/min and 200K/day on the free tier (~65 picture pages a day). Mistral OCR: strong on documents but the free plan trains on data, and chat is a separate API. **Trade-off accepted:** on Gemini's free tier Google may use inputs/outputs to improve its products; fine for course slides in development, turn on billing before real users.
+- **Chat model decided in Stage 7, not now:** vision and chat only meet through the database (vision writes passages, chat reads them), so they can come from different providers. Stage 7 will test Gemini vs Groq on the same questions.
+- **Free-tier limits measured in AI Studio (per model):** gemini-3.8-flash 5 requests/min, 250K tokens/min, **20 requests/day**; gemini-3.5-flash-lite 15/min, 250K/min, 500/day. Requests, not tokens, are the bottleneck → several pages per request. Daily quota resets at midnight Pacific (12:30 IST; 13:30 IST in winter).
+- **Pinned model names, never `*-latest` aliases:** an alias can silently switch model and change results. The name lives in `.env` so a retired model is a one-line change. Each page records `vision_model`.
+- **Migration 003:** `materials.processing_mode` (smart/thorough); per-page `vision_status` (none → pending → processing → done | failed), `vision_attempts`, `vision_error` (required when failed), `vision_model`, `image_path`; `document_chunks.source` (pdf_text/vision) separate from `chunk_type` (text/table/diagram) because WHAT a passage is and HOW it was read are independent facts; partial index for the reader's queue; `material_overview` gets counts via `CROSS JOIN LATERAL` + `count(*) FILTER (...)` (one pass over the pages). Existing picture pages were queued (`pending`). `CREATE OR REPLACE VIEW` may only add columns at the end.
+- **Page pictures (`processing/render.py`):** the WHOLE page, not just embedded images, because many diagrams are vector drawings with no image inside, and the slide around a screenshot gives it meaning. PNG (lossless, sharp text) at 2000 px on the long side (`PAGE_IMAGE_LONG_SIDE`): ~210 KB and ~0.1 s per slide; JPEG was no smaller on slides.
+- **Stored as** `uploads/<user>/<material>/page-0012.png`: one folder per file, deleted with it (file delete and course delete). Written atomically (temp name + `os.replace`) so a crash never leaves half a picture.
+- **When:** after the text pass commits, outside its transaction: a picture that fails to save must not undo a correctly read file. Each picture is committed on its own. On startup, pending pages without a picture get one (this covered files uploaded before 5b).
+- **`GET /materials/{id}/pages/{n}/image`:** owner check like everything else (someone else's → 404), `Cache-Control: private` (only the student's own browser caches their notes).
+- **Upload takes `mode`** as a second form field next to the file (`Literal["smart","thorough"]`, anything else → 422).
+
+## Stage 5b — step 2: the image reader (Gemini)
+
+- **SDK:** `google-genai==2.29.0` (16 days old when pinned; 2.33.0 was released the same day and skipped). `tzdata` is added because Python's `zoneinfo` has no time-zone database on Windows.
+- **One background thread, not a pool** (`processing/vision_worker.py`): the limit is a few requests per minute, so parallel threads couldn't go faster; one thread keeps the request count exact. The queue is the `vision_status` column, not memory: a restart loses nothing (`processing` pages go back to `pending` on startup, attempt not counted).
+- **Claiming a batch** is one SQL statement: oldest file with waiting pages → up to 5 of its pages `FOR UPDATE SKIP LOCKED` → `processing` (`UPDATE ... FROM batch ... RETURNING`). `SKIP LOCKED`: a second process skips rows being claimed instead of waiting; no page is claimed twice.
+- **5 pages per request** because requests (20/day) are the limit, not tokens. **A page's LAST try is read alone**: testing showed one broken page failing its 4 neighbours. First tries stay batched because most errors (503) hit the whole request anyway.
+- **Prompt (`processing/vision.py`):** Gemini gets each page's already-extracted text and must add only what's in the pictures (no duplicates in search): exact transcription, code/terminal screenshots in ``` fences, image tables as one markdown table, formulas in LaTeX, diagrams as one summary sentence + every node and every arrow "From A to B, labelled X" with exact labels, `[unreadable]` instead of guessing, logos/headers ignored, a heading line per passage.
+- **Structured output:** `response_schema` = Pydantic classes (pages → passages {type, content}); the SDK returns parsed objects. Page numbers we didn't ask for are ignored; a page Gemini skipped goes back to the queue.
+- **Settings:** `thinking_level=LOW` (copying needs little reasoning; default HIGH is slow); temperature left at Google's default 1.0 (Google warns lower values can make Gemini 3 loop); `MEDIA_RESOLUTION_HIGH` per image (small screenshot text).
+- **Errors:** 429 with a `PerDay` quota id → that model is used up until midnight Pacific (switch to the fallback, then pause); its `retryDelay` is ignored (often "1s", misleading). 429 per-minute → wait, same model (waiting beats a weaker model). 401/403/404 → setup problem (key/model): pages stay queued, attempt not counted, reader pauses 10 min and logs the reason. Other errors (503, unusable answer) → retry with backoff (15 s, 30 s, 60 s…), page failed after 3 tries with the reason.
+- **Rate limiter (`processing/rate_limit.py`):** per model, sliding 60-second window + daily counter reset at midnight `America/Los_Angeles` (12:30 IST; 13:30 IST after the US clock change). A request is counted BEFORE sending (Google counts failed ones too). In memory; after a restart Google's 429 corrects it.
+- **Saving:** one transaction per batch. The file row is locked `FOR UPDATE` first: if the file was deleted while Gemini was reading, the answer is dropped; and "highest chunk_index + 1" is safe. A re-read page replaces only its `vision` passages, never the exact `pdf_text` ones. Passages → chunks with the 5a size rules: tables and diagrams whole, long text split at paragraphs, a ``` block never split, the heading line repeated on each piece.
+- **API:** `GET /vision/status` (ok / paused + until when / off / error; the exact error stays in the server log), `POST /materials/{id}/vision/retry` (failed pages → pending with fresh attempts; 409 if none failed).
+- **Tested** with a fake Gemini on the real database: 58 checks (limits, quota parsing, error kinds, batching, fallback, pause until 12:30 IST, retries, solo last try, deleted file, interrupted requests) + the real thread end to end (24 pages in 6 requests, wakes within 0.1 s, stops cleanly).
+
+- **Fixes after the first real run (23 Oct):**
+  - **No timeout by default** in google-genai (httpx `timeout=None`): a slow request froze the reader for ~10 min with no log line. Now `HttpOptions(timeout=180 s)`, `max_output_tokens=12288` (a looping answer stops early) and a log line BEFORE each request ("Sending page(s) … request n of 20 today"). Lesson: every network call gets a timeout; log before slow steps, not only after.
+  - **503 = Google overloaded, not the page's fault.** It had counted as a page attempt, so 4 good pages ended `failed`. Now 5xx → `ServerBusy`: pages back in the queue without counting the attempt; wait 30 s, then 60 s; after 3 in a row the model rests 10 min and the fallback model reads meanwhile; if both rest, `/vision/status` says paused with reason "busy" (vs "quota"), and the file row shows the server's reason.
+  - **Timeouts and network errors count as "Google busy" too** (`ServerBusy`), not as the page's fault: the evening run showed an overloaded model answering some requests with 503 and never answering others. After 3 in a row the fallback model takes over. Only errors that can be about the page itself (400, an answer cut off or refused, a page Gemini skipped) count as tries.
+  - **Failure reasons are plain words** because the student sees them: "Gemini's answer was too long and got cut off", "Gemini refused to read this page", "Gemini's answer couldn't be understood".
+
+## Stage 6 — Embedding Generation & Backfill
+
+- **Embedding Model: `all-MiniLM-L6-v2` (384 dimensions).**
+  - Uses `sentence-transformers` running on CPU by default (`EMBEDDING_DEVICE=cpu`).
+  - Strict 384-dimension vector output with L2 normalization (`normalize_embeddings=True`), ensuring cosine similarity in PostgreSQL pgvector (`<=>` operator) is mathematically equivalent to dot product.
+  - Runtime validation checks every embedding for exactly 384 elements and verifies all components are finite floats (`math.isfinite()`).
+- **Embedding Ingestion in Workers:**
+  - Both `worker.py` (text and table chunks) and `vision_worker.py` (diagram descriptions and vision reading chunks) compute embeddings before persisting chunks to the database.
+  - If the embedding model fails or is uninitialized, the failure is caught gracefully, logged, and the chunk is inserted with `embedding = NULL` so the worker does not crash.
+- **Resumable Backfill Utility (`processing/backfill_embeddings.py`):**
+  - Queries document chunks where `embedding IS NULL` joined to `materials` with `status = 'ready'`.
+  - Processes chunks in configurable batches (`EMBEDDING_BATCH_SIZE`, default 64).
+  - Can be run programmatically or via CLI (`python -m backend.app.processing.backfill_embeddings [--course-id ...] [--limit ...] [--dry-run]`).
+  - Safe, idempotent, and non-destructive: existing chunks and vectors are never overwritten.
+
+## Stage 7 — Vector Retrieval & RAG Pipeline
+
+- **Vector Similarity Search (`services/retrieval.py`):**
+  - Generates a 384-dim query embedding using the same `all-MiniLM-L6-v2` model.
+  - Executes similarity retrieval with the SQL `search_chunks` function using cosine distance (`<=>`).
+  - Provides a pure SQLAlchemy fallback if the stored procedure is unavailable.
+  - Filters strictly by student ownership (`user_id`), optional `course_id` boundary, material `ready` status, and minimum similarity threshold (`RAG_SIMILARITY_THRESHOLD`, default 0.25).
+  - Ranks by similarity descending up to `RAG_TOP_K` (default 5).
+- **RAG System Prompt & LLM Grounding (`services/rag.py` & `services/llm.py`):**
+  - **Prompt Defense:** The system prompt instructs the assistant strictly to ignore student attempts to override instructions ("jailbreaks", "ignore previous instructions", or "pretend to be something else").
+  - **Grounding & Honest Fallbacks:** If the retrieved passages contain no relevant information, the model returns a clear, helpful refusal: *"I could not find information about that in your uploaded study materials. Please verify that notes covering this topic have been uploaded and processed."*
+  - **Inline Citations:** The model must reference source materials using bracketed citation tokens `[doc:TITLE p:PAGE]` corresponding to retrieved chunks.
+  - **Context Token Bounding:** Assembled context strings are bounded by `RAG_MAX_CONTEXT_TOKENS` (default 3000 tokens) to prevent context overflows and reduce latency.
+  - **LLM Abstraction (`BaseLLM`):** Includes `GeminiLLM` using `google-genai` SDK with fallback model support, and a deterministic `MockLLM` for fast, offline testing.
+
+## Stage 8 — Chat API & Persistence
+
+- **Chat Routers & Schema (`routers/chat.py`):**
+  - `POST /chat/sessions`: Creates a new chat session scoped to a user and optional course.
+  - `GET /chat/sessions`: Lists all active user chat sessions with snippet and message counts.
+  - `GET /chat/sessions/{id}`: Returns full conversation history including citations.
+  - `DELETE /chat/sessions/{id}`: Cascades deletion cleanly across messages and source citations.
+  - `POST /chat/sessions/{id}/messages`: Appends user prompt, executes vector retrieval, calls LLM, saves user message and assistant reply, and persists exact `message_sources` foreign key links.
+  - `POST /chat/quick`: Non-persistent stateless endpoint for quick single-turn inquiries.
+- **Materials Listing (`routers/materials.py`):**
+  - Added `GET /materials` to return all materials across all courses belonging to the authenticated student, supporting global library inspection.
+

@@ -1659,51 +1659,23 @@ And technically:
 
 ---
 
-# 38. Current Starting Point
-
-You are currently here:
+# 38. Current Project State
 
 ```text
-PHASE 0
-   ↓
-Project Repository
-   ↓
-PHASE 1
-   ↓
-Backend + Frontend Foundation
+PHASE 0: Project Setup & Repository Foundation                [DONE]
+PHASE 1: PostgreSQL 17 + pgvector Extension                  [DONE]
+PHASE 2: Database Design & Schema Migrations                 [DONE]
+PHASE 3: FastAPI Backend, Auth (Argon2id + JWT) & Security   [DONE]
+PHASE 4: Course Management & Isolation                       [DONE]
+PHASE 5a: PDF Processing, Extraction, Text Chunking          [DONE]
+PHASE 5b: Gemini Vision Reading (Diagrams & Images)          [DONE]
+PHASE 6: Embedding Generation (all-MiniLM-L6-v2) & Backfill  [DONE]
+PHASE 7: Vector Retrieval & Grounded RAG Pipeline            [DONE]
+PHASE 8: Chat Sessions, Citations & Persistence APIs         [DONE]
+PHASE 9: Frontend Interactive Chat & Source Viewer           [DONE]
+PHASE 10: Frontend Materials Library & Progress Discovery    [DONE]
+PHASE 11: Comprehensive Automated Testing (26 passed)        [DONE]
 ```
 
-### Member 1 — You
+All core architecture, database migrations, RAG pipeline components, APIs, and frontend pages are implemented, integrated, and verified with passing test suites.
 
-Start with:
-
-```text
-1. Create backend branch
-2. Set up Python environment
-3. Install FastAPI
-4. Create backend/app/main.py
-5. Create /health
-6. Run FastAPI
-7. Commit
-8. Push branch
-```
-
-### Member 2
-
-At the same time:
-
-```text
-1. Create frontend branch
-2. Set up Next.js
-3. Create basic layout
-4. Create initial pages
-5. Run Next.js
-6. Commit
-7. Push branch
-```
-
-**Do not move to RAG yet.**
-
-Once both foundations are working, move together to **Phase 1: PostgreSQL + pgvector**, then continue phase-by-phase.
-
-This README should be your team's **master development checklist** throughout the project.

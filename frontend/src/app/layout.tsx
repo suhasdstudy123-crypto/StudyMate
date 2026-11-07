@@ -18,7 +18,11 @@ export const metadata: Metadata = {
     "Upload your lecture notes and previous-year papers, ask questions, and get answers from your own material with the page they came from.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     // suppressHydrationWarning: next-themes adds class="dark" in the browser
     // before React starts, so the server HTML and browser HTML differ on

@@ -129,8 +129,31 @@ class MaterialResponse(ORMSchema):
 
 
 # ------------------------------------------------------------------
-# Chat (the RAG chat endpoint arrives in Stage 7)
+# Chat
 # ------------------------------------------------------------------
+
+class SourceCitationResponse(BaseModel):
+    chunk_id: UUID
+    material_id: UUID
+    material_title: str
+    page_number: int
+    content: str
+    chunk_type: str = "text"
+    source: str = "pdf_text"
+    similarity: float | None = None
+    rank: int
+
+
+class ChatMessageResponse(ORMSchema):
+    id: UUID
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ChatMessageWithSourcesResponse(ChatMessageResponse):
+    sources: list[SourceCitationResponse] = []
+
 
 class ChatSessionResponse(ORMSchema):
     id: UUID
@@ -140,8 +163,34 @@ class ChatSessionResponse(ORMSchema):
     updated_at: datetime
 
 
-class ChatMessageResponse(ORMSchema):
-    id: UUID
-    role: str
-    content: str
-    created_at: datetime
+class ChatSessionDetailResponse(ChatSessionResponse):
+    course_name: str | None = None
+    messages: list[ChatMessageWithSourcesResponse] = []
+
+
+class ChatSessionCreate(BaseModel):
+    course_id: UUID | None = None
+    title: str | None = Field(default=None, max_length=255)
+
+
+def _clean_name(value: str) -> str:
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            raise ValueError("Field cannot be blank")
+    return value
+
+
+class ChatMessageCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+
+    clean_content = field_validator("content", mode="before")(_clean_name)
+
+
+class QuickChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+    course_id: UUID | None = None
+    session_id: UUID | None = None
+
+    clean_question = field_validator("question", mode="before")(_clean_name)
+

@@ -24,3 +24,69 @@ A running log of frontend decisions and why they were made.
 - **Open-redirect protection.** `?next=` is only followed if it's a path on our own site (`/courses`), never `//evil.com`.
 - **Client-side validation mirrors the backend rules** (email format, password 8–128) for instant feedback; the backend still validates everything again.
 - **Error mapping.** 401 → form message, 409 → "account already exists" on the email field, 422 → messages under each field, no response → "Couldn't reach StudyMate".
+
+## Stage 4 — Courses page
+
+- **`lib/courses.ts`** holds the `Course` type and one function per request (list, create, update, delete). Pages never build URLs themselves.
+- **Native `<dialog>` instead of a dialog library.** `showModal()` already gives the backdrop, Esc to close, a focus trap and focus returning to the opening button. `components/ui/dialog.tsx` only connects React's `open` prop to it. React's `autoFocus` runs before `showModal()` (while the dialog is hidden) and is lost, so the first field is marked `data-autofocus` and focused after `showModal()`.
+- **One form for create and edit** (`course-form-dialog.tsx`), so the rules can't drift apart. Client checks mirror `CourseCreate`; the backend checks again. 409 → "You already have a course with this name" on the name field.
+- **The list is updated from the server's answer** (the saved course it returns), not by reloading everything or guessing.
+- **Delete asks first and says what will be lost**, using `material_count` from the view. "Keep it" is focused by default, so pressing Enter by accident doesn't delete.
+- **Course cards are notebooks:** a ballpoint spine with binding holes, ruled lines (`.ruled`), course code as a label. Edit/delete icons appear on hover with a mouse, are always visible on touch screens (`@media (hover: hover)`), and show on keyboard focus.
+- **Data loading in an effect** sets state only when the answer arrives, with an `alive` flag to ignore late answers. "Try again" bumps a counter that re-runs the effect. (ESLint's `react-hooks/set-state-in-effect` rule flags setting state synchronously inside an effect, because that causes an extra render.)
+- **Dashboard** ticks "Make your first course" from real data and shows the 3 most recent courses.
+
+## Stage 5a — Uploads through the forwarder
+
+- **`experimental.proxyClientMaxBodySize: "60mb"` in `next.config.ts`.** Next.js reads at most 10 MB of a request body before forwarding it; a 35 MB PDF was cut off and the browser got a 500 ("socket hang up" in the Next terminal). 60 MB is a bit above the backend's 50 MB, so oversized files still get FastAPI's clear 413 message.
+
+## Stage 5a (part 2) — Course page, uploads, "What StudyMate read"
+
+- **`/courses/[id]`** is a dynamic route: one page file for every course; `useParams()` reads the id. 404 from the backend (not yours / doesn't exist) shows "Course not found".
+- **Course cards are links** with the *stretched link* pattern: the title's `<Link>` has an `::after` covering the card, edit/delete buttons sit above it (`relative z-10`). A button inside a link would be invalid HTML.
+- **Uploads use `XMLHttpRequest`, not `fetch`**, because only XHR reports upload progress (`xhr.upload.onprogress`). The body is `FormData`; the browser sets the multipart `Content-Type` (with its boundary) itself. `errorFromResponse()` in `lib/api.ts` is shared so XHR errors read the same as fetch errors. Uploads run one at a time; each can be cancelled (`xhr.abort()`).
+- **Checked in the browser first** (PDF? empty? > 50 MB?) for instant feedback; the backend checks again.
+- **Polling:** while any file is `pending`/`processing`, the page re-fetches the file list every 1.5 s, and stops when all are done or the page is left (cleanup clears the interval). A ref holds the latest list so the timer can announce "X is ready" to screen readers without restarting.
+- **One row component, five states:** uploading % → queued (sliding bar) → "Reading page x of y" → ready (pages · passages · tables) → failed (reason + Retry). Ready files with `vision_page_count > 0` say plainly how many pages have pictures StudyMate can't read yet.
+- **"What StudyMate read"** dialog: page list (table and picture markers) + that page's passages, exactly as stored. Text from notes in the serif font; table chunks parsed from markdown into a real `<table>`.
+- **Rename** (`PATCH /materials/{id}`) changes only the display title; delete is disabled while a file is being read (the backend would answer 409).
+- **Grid blowout fix:** a CSS grid column is never narrower than its widest content by default, so on phones the page and the viewer were wider than the screen. `grid-cols-1` / `minmax(0, 1fr)` lets the column shrink. On phones the file actions wrap onto their own line (no hover, so all are visible).
+
+## Stage 5b — Page pictures in "What StudyMate read"
+
+- Passages are numbered per page ("Passage 2 of 3"), not by the file-wide index.
+- **Themed scrollbars:** `scrollbar-color` on `<html>` (inherited by every scroll area) with the soft ink token, transparent track; `scrollbar-width: thin` inside the page. Safari fallback with `::-webkit-scrollbar` inside `@supports not (scrollbar-color: auto)`.
+- Pages the image reader reads show **the page picture** (exactly what the reader is sent), with a skeleton while loading and "Full size" to zoom into screenshot text. A plain `<img>`, not `next/image`: `next/image` downloads on the server without the login cookie.
+- A status note per page: waiting / being read / read / failed. Thorough-mode pages without pictures say so.
+- Passages written by the image reader carry a **"Read from an image — check it"** label (dashed outline in ink, not highlighter yellow: yellow is reserved for cited text). Diagram passages get their own icon.
+
+## Stage 5b — step 2: picture reading in the UI
+
+- **Smart / Thorough** picker under the upload box: real radio buttons in a `<fieldset>` styled as a switch (arrow keys, screen readers for free). Remembered in `localStorage` (read after the first render to avoid a hydration mismatch; wrapped in try/catch for blocked storage). Sent as a second form field `mode`.
+- **File row, picture reading:** "Reading pictures · 7 of 19 pages" + bar / paused ("today's free limit is used up. Continues at 12:30 PM", time from the server in UTC, shown with `Intl.DateTimeFormat` in local time) / off or setup problem / "N pages couldn't be read · Try again" / "19 pages read from pictures". The text is searchable meanwhile, and the row says so.
+- **Polling:** 1.5 s while a file's text is read, 5 s while only pictures are (that takes minutes), plus `GET /vision/status` on each tick.
+- **Viewer:** page-list icon per page status (waiting / being read / read / failed); refreshes every 5 s while pages are waiting (a `tick` counter in both effects' dependencies, so no loading flicker); failed pages show the reason; ``` blocks render as `<pre>` (exact characters, scrolls sideways on phones); image-reader text keeps its line breaks (`whitespace-pre-line`).
+- **Try again in the viewer:** a failed page's note has its own Try again button (students look for it where the problem is shown, not only on the file row). It retries every failed page of the file and tells the course page through `onChanged`, so the file row switches to "Reading pictures…" at once.
+
+## Stage 7B — Interactive Chat Experience
+
+- **Chat Page (`src/app/(app)/chat/page.tsx`):**
+  - Interactive multi-turn study assistant chat interface.
+  - Sidebar session management: create new study session, view existing sessions with relative timestamps, switch active conversations, and delete sessions with confirmation.
+  - Course scoping filter: dropdown allowing students to ask questions across "All Courses" or constrain answers to a specific course (e.g., DBMS, Operating Systems).
+  - Welcome state with starter prompt suggestions (e.g., "Summarize key concepts", "Compare ACID properties", "Explain diagrams from notes").
+  - Message bubble presentation: user messages aligned right in accent bubble; assistant replies aligned left in paper style with markdown formatting and citation highlights.
+  - Collapsible source drawers: each assistant answer renders expandable citation cards displaying document name, page number, similarity percentage, chunk category (text vs. diagram), and quoted excerpt in serif font with highlighter styling.
+  - Direct file inspection: citation cards provide a "View Page" button linking to the course viewer.
+  - Auto-resizing textarea with `Enter` to send and `Shift+Enter` for multi-line questions.
+
+## Stage 8B — Standalone Materials Library
+
+- **Materials Discovery Page (`src/app/(app)/materials/page.tsx`):**
+  - Unified repository view of all documents uploaded across all courses.
+  - Metric summary cards: Total Documents, Ready for Search, Pages Processed, and Pictures Read.
+  - Course filter pill bar allowing instant filtering by specific course or viewing all documents.
+  - Full lifecycle integration with `MaterialRow`: live progress polling for documents being processed or vision-read.
+  - Seamless page inspection via `PagesDialog`, document renaming, deletion, and retry modal dialogs.
+  - Quick action to jump straight into chat scoped to any selected course.
+

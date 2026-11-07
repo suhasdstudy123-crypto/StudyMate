@@ -3,7 +3,10 @@ node_modules/
 
 # Environment variables (secrets) - only .env.example is committed
 .env
+.env.*
+*.env
 .env.local
+backend/.env
 
 # Next.js build output
 .next/
@@ -13,6 +16,14 @@ out/
 venv/
 .venv/
 __pycache__/
+.pytest_cache/
+
+# Uploaded documents and test artifacts (never committed)
+backend/uploads/
+uploads/
+*.pdf
+rag_test_results.json
+*.log
 
 # Local AI assistant files (kept on this machine only, never pushed)
 CLAUDE.md
