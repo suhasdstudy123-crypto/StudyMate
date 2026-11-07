@@ -27,19 +27,17 @@ from uuid import UUID
 from sqlalchemy import text
 
 from backend.app.config import (
+    CHAT_RESERVED_REQUESTS,
     GEMINI_API_KEY,
     VISION_FALLBACK_MODEL,
-    VISION_FALLBACK_RPD,
-    VISION_FALLBACK_RPM,
     VISION_MAX_ATTEMPTS,
     VISION_MODEL,
-    VISION_MODEL_RPD,
-    VISION_MODEL_RPM,
     VISION_PAGES_PER_REQUEST,
+    gemini_limits,
 )
 from backend.app.database import SessionLocal
 from backend.app.processing import embed_worker
-from backend.app.processing.rate_limit import ModelLimiter
+from backend.app.processing.rate_limit import ModelLimiter, limiter_for
 from backend.app.processing.vision import (
     GeminiReader,
     PageInput,
@@ -74,9 +72,16 @@ _wake = threading.Event()   # set = "new pages are waiting, look now"
 _stop = threading.Event()
 _thread: threading.Thread | None = None
 
-limiters: list[ModelLimiter] = [ModelLimiter(VISION_MODEL, VISION_MODEL_RPM, VISION_MODEL_RPD)]
+# The SAME limiter objects the chat uses (one per model, Stage 7): Google
+# counts requests per model per project, whoever sends them.
+limiters: list[ModelLimiter] = [limiter_for(VISION_MODEL, *gemini_limits(VISION_MODEL))]
 if VISION_FALLBACK_MODEL and VISION_FALLBACK_MODEL != VISION_MODEL:
-    limiters.append(ModelLimiter(VISION_FALLBACK_MODEL, VISION_FALLBACK_RPM, VISION_FALLBACK_RPD))
+    limiters.append(limiter_for(VISION_FALLBACK_MODEL, *gemini_limits(VISION_FALLBACK_MODEL)))
+
+# The reader leaves the last CHAT_RESERVED_REQUESTS of each model's day to the
+# chat: a student waiting for an answer matters more than a page that can be
+# read tomorrow.
+RESERVE = CHAT_RESERVED_REQUESTS
 
 
 def wake() -> None:
@@ -274,7 +279,7 @@ def reset_interrupted() -> int:
 
 def pick_limiter() -> ModelLimiter | None:
     for limiter in limiters:
-        if limiter.used_up_until() is None:
+        if limiter.used_up_until(RESERVE) is None:
             return limiter
     return None
 
@@ -285,7 +290,7 @@ def run_once(reader) -> str:
     limit), 'read', 'quota', 'error', 'config' (key/model rejected)."""
     limiter = pick_limiter()
     if limiter is None:
-        state.paused_until = min(l.used_up_until() or 0 for l in limiters)
+        state.paused_until = min(l.used_up_until(RESERVE) or 0 for l in limiters)
         state.pause_reason = "busy" if any(l.resting() for l in limiters) else "quota"
         return "paused"
     state.paused_until = None
@@ -305,7 +310,11 @@ def run_once(reader) -> str:
         release(pages, "The page picture is missing. Re-upload the file.", count_attempt=True)
         return "error"
 
-    limiter.record()  # before sending: Google counts failed requests too
+    # Check and count in ONE locked step (Google counts failed requests too).
+    # The chat may have taken the last free slot this minute since we looked.
+    if not limiter.try_acquire(RESERVE):
+        release(pages, None, count_attempt=False)
+        return "wait"
     state.model = limiter.model
     log.info(
         "Sending page(s) %s of %s to %s (request %d of %d today)",

@@ -108,3 +108,35 @@ EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "auto").lower()
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "16"))
 # "false" = don't load the model (saves ~2.5 GB memory; meaning search is off).
 EMBEDDING_ENABLED = os.getenv("EMBEDDING_ENABLED", "true").lower() == "true"
+
+# --- Chat: answers from your notes (Stage 7) ----------------------------
+# Same Gemini key and, by default, the same two models as the picture reader.
+CHAT_MODEL = os.getenv("CHAT_MODEL", VISION_MODEL)
+# Takes over when the main model's daily quota is used up, its per-minute
+# limit is full (a student shouldn't wait 40 s) or Google is overloaded.
+CHAT_FALLBACK_MODEL = os.getenv("CHAT_FALLBACK_MODEL", VISION_FALLBACK_MODEL or "") or None
+# Rewrites follow-ups ("explain the second one") into a stand-alone search
+# question. A small, fast model with a big daily quota is enough for that.
+CHAT_REWRITE_MODEL = os.getenv("CHAT_REWRITE_MODEL", CHAT_FALLBACK_MODEL or CHAT_MODEL)
+# How many passages from the search the model gets to read (top k).
+CHAT_PASSAGES = int(os.getenv("CHAT_PASSAGES", "8"))
+# The picture reader leaves the last N requests of each model's day to the
+# chat: a student waiting for an answer matters more than a page that can
+# also be read tomorrow.
+CHAT_RESERVED_REQUESTS = int(os.getenv("CHAT_RESERVED_REQUESTS", "10"))
+
+# Free-tier limits belong to the MODEL (AI Studio > Rate limit), not to the
+# feature using it: Google counts every request of the project per model.
+# (requests per minute, requests per day)
+_KNOWN_LIMITS: dict[str, tuple[int, int]] = {
+    VISION_MODEL: (VISION_MODEL_RPM, VISION_MODEL_RPD),
+}
+if VISION_FALLBACK_MODEL:
+    _KNOWN_LIMITS[VISION_FALLBACK_MODEL] = (VISION_FALLBACK_RPM, VISION_FALLBACK_RPD)
+
+
+def gemini_limits(model: str) -> tuple[int, int]:
+    """(per minute, per day) for a model. A model we don't know the limits of
+    gets the strictest ones we've seen (5/min, 20/day): too careful costs a
+    little speed, too generous costs failed requests."""
+    return _KNOWN_LIMITS.get(model, (5, 20))

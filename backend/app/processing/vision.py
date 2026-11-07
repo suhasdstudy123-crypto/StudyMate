@@ -24,12 +24,18 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-import httpx
-from google import genai
-from google.genai import errors, types
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from backend.app.processing.chunking import TARGET_CHARS, Chunk, estimate_tokens
+from backend.app.processing.gemini import (  # noqa: F401  (QuotaExceeded, ServerBusy re-exported)
+    GeminiConfigError,
+    GeminiError,
+    QuotaExceeded,
+    ServerBusy,
+    make_client,
+    translate,
+)
 
 log = logging.getLogger("studymate.vision")
 
@@ -133,51 +139,11 @@ def build_contents(pages: list[PageInput]) -> list:
 # ------------------------------------------------------------------
 # Errors the worker reacts to differently
 # ------------------------------------------------------------------
-
-class QuotaExceeded(Exception):
-    """429 from Google. daily=True: the day's quota is used up (switch model,
-    don't retry). daily=False: too many per minute (wait retry_after seconds)."""
-
-    def __init__(self, daily: bool, retry_after: float, message: str):
-        super().__init__(message)
-        self.daily = daily
-        self.retry_after = retry_after
-
-
-class VisionError(Exception):
-    """Anything else (server error, unreadable answer): retry later, max 3 times."""
-
-
-class ServerBusy(VisionError):
-    """5xx from Google (503 = overloaded), or no answer within the timeout.
-    Google's problem, not the page's: the attempt doesn't count; the reader
-    waits, and if Google stays busy it rests this model and uses the fallback
-    for a while. (In the first real run, an overloaded model answered some
-    requests with 503 and simply never answered others: same cause.)"""
-
-
-class ReaderConfigError(VisionError):
-    """Our setup is wrong (key rejected, model name unknown). Not the page's
-    fault: the pages stay in the queue and the reader pauses until fixed."""
-
-
-def _parse_quota_error(err: errors.APIError) -> QuotaExceeded:
-    """A 429 body looks like:
-        {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": [
-            {"@type": "...QuotaFailure", "violations": [
-                {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", ...}]},
-            {"@type": "...RetryInfo", "retryDelay": "31s"}]}}
-    "PerDay" in the quota id = used up until tomorrow. Its retryDelay is
-    misleading (often "1s"), so for a daily quota we ignore it."""
-    details = (err.details or {}).get("error", {}).get("details", []) if isinstance(err.details, dict) else []
-    quota_ids = [v.get("quotaId", "") for d in details for v in d.get("violations", []) or []]
-    delay = 60.0
-    for d in details:
-        match = re.fullmatch(r"(\d+(?:\.\d+)?)s", str(d.get("retryDelay", "")))
-        if match:
-            delay = float(match.group(1))
-    daily = any("PerDay" in q for q in quota_ids)
-    return QuotaExceeded(daily=daily, retry_after=max(delay, 5.0), message=err.message or "quota exceeded")
+# Defined once in gemini.py (the chat reacts to them the same way); the old
+# names stay so vision_worker reads as before.
+VisionError = GeminiError              # this request failed: counts as a try
+ReaderConfigError = GeminiConfigError  # our setup is wrong: pause, pages wait
+# QuotaExceeded and ServerBusy keep their names.
 
 
 # ------------------------------------------------------------------
@@ -197,7 +163,7 @@ MAX_OUTPUT_TOKENS = 12_288
 
 class GeminiReader:
     def __init__(self, api_key: str):
-        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS))
+        self.client = make_client(api_key, REQUEST_TIMEOUT_MS)
 
     def read(self, model: str, pages: list[PageInput]) -> VisionResult:
         try:
@@ -215,22 +181,10 @@ class GeminiReader:
                     max_output_tokens=MAX_OUTPUT_TOKENS,
                 ),
             )
-        except errors.ClientError as err:
-            if err.code == 429:
-                raise _parse_quota_error(err) from err
-            if err.code in (401, 403, 404):
-                # 401/403: key missing, wrong or revoked; 404: model name unknown.
-                raise ReaderConfigError(f"Gemini rejected our setup ({err.code}): {err.message}") from err
-            # 400: something about this request (e.g. a picture it can't open).
-            raise VisionError(f"Gemini refused the request ({err.code}): {err.message}") from err
-        except errors.ServerError as err:
-            raise ServerBusy(f"Gemini's servers are busy ({err.code})") from err
-        except httpx.TimeoutException as err:
-            raise ServerBusy(f"Gemini didn't answer within {REQUEST_TIMEOUT_MS // 1000} s") from err
-        except httpx.TransportError as err:  # no internet, Wi-Fi dropped, DNS failed
-            raise ServerBusy(f"Couldn't reach Gemini ({type(err).__name__})") from err
         except Exception as err:
-            raise VisionError(f"Unexpected problem talking to Gemini ({type(err).__name__})") from err
+            # 429 -> QuotaExceeded, 401/403/404 -> setup, 5xx/timeout/network
+            # -> ServerBusy, else -> VisionError (rules in gemini.py)
+            raise translate(err, REQUEST_TIMEOUT_MS / 1000) from err
 
         result = response.parsed
         if not isinstance(result, VisionResult):
