@@ -237,19 +237,68 @@ class SearchResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Chat (the RAG chat endpoint arrives in Stage 7)
+# Chat (Stage 7)
 # ------------------------------------------------------------------
 
-class ChatSessionResponse(ORMSchema):
+MAX_QUESTION_CHARS = 2000
+
+
+class ChatSessionCreate(BaseModel):
+    course_id: UUID                 # a chat always searches ONE of my courses
+
+
+class ChatQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def strip_question(cls, value):
+        # "   " -> "" -> rejected by min_length (422), like blank course names
+        return value.strip() if isinstance(value, str) else value
+
+
+class ChatSessionSummary(BaseModel):
     id: UUID
-    course_id: UUID | None
-    title: str | None
+    course_id: UUID | None          # None = the course was deleted (history kept)
+    course_name: str | None
+    title: str | None               # the first question, shortened
     created_at: datetime
     updated_at: datetime
+    message_count: int
 
 
-class ChatMessageResponse(ORMSchema):
+class ChatSource(BaseModel):
+    """A passage shown to the model for one answer: [n] in the answer text."""
+    n: int                          # = message_sources.rank
+    cited: bool                     # the answer referenced it
+    chunk_id: UUID
+    material_id: UUID
+    material_title: str
+    page_number: int
+    chunk_type: str
+    source: str                     # pdf_text | vision
+    content: str
+    similarity: float | None
+
+
+class ChatMessageOut(BaseModel):
     id: UUID
-    role: str
+    role: Literal["user", "assistant"]
     content: str
     created_at: datetime
+    status: str | None              # answers: answered | not_in_notes | stopped
+    model: str | None
+    search_query: str | None        # questions: what we searched with, if rewritten
+    sources: list[ChatSource] = []
+
+
+class ChatSessionDetail(ChatSessionSummary):
+    messages: list[ChatMessageOut]
+
+
+class ChatStatus(BaseModel):
+    # GET /chat/status: can the chat answer right now, and with which model?
+    status: Literal["ok", "paused", "off"]
+    model: str | None               # the model the next answer will most likely use
+    message: str | None
+    available_at: datetime | None   # paused: when answers work again (UTC)

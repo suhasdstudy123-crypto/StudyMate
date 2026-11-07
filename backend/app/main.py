@@ -10,6 +10,7 @@ from backend.app.database import get_db
 from backend.app.processing import embed_worker, vision_worker, worker
 from backend.app.routers.admin import router as admin_router
 from backend.app.routers.auth import router as auth_router
+from backend.app.routers.chat import router as chat_router
 from backend.app.routers.courses import router as courses_router
 from backend.app.routers.materials import router as materials_router
 from backend.app.routers.search import router as search_router
@@ -53,7 +54,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="StudyMate API",
     description="Backend API for StudyMate: upload study material, ask questions, get answers from your own notes.",
-    version="0.6.0",
+    version="0.7.0",
     lifespan=lifespan,
 )
 
@@ -61,6 +62,7 @@ app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(materials_router)
 app.include_router(search_router)
+app.include_router(chat_router)
 app.include_router(vision_router)
 app.include_router(admin_router)
 
