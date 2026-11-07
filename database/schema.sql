@@ -257,17 +257,40 @@ CREATE TABLE chat_sessions (
 -- ============================================================
 -- 6. CHAT MESSAGES
 -- Each question (role = 'user') and answer (role = 'assistant').
+-- A question and its answer are saved in ONE transaction (migration 006).
 -- ============================================================
 
 CREATE TABLE chat_messages (
-    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID        NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role       VARCHAR(20) NOT NULL,
-    content    TEXT        NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id    UUID         NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role          VARCHAR(20)  NOT NULL,
+    content       TEXT         NOT NULL,
+    -- clock_timestamp(), not now(): now() is the time the TRANSACTION began,
+    -- so a question and its answer saved together would get the same time.
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    -- Answers only: answered | not_in_notes (honest refusal) | stopped (by the student)
+    status        VARCHAR(20),
+    model         VARCHAR(100),             -- which Gemini model wrote the answer
+    search_query  TEXT,                     -- questions only: rewritten follow-up we searched with
+    prompt_tokens INTEGER,                  -- answers only: what the answer cost
+    output_tokens INTEGER,
 
     CONSTRAINT chat_messages_role_check    CHECK (role IN ('user', 'assistant')),
-    CONSTRAINT chat_messages_content_check CHECK (length(trim(content)) > 0)
+    CONSTRAINT chat_messages_content_check CHECK (length(trim(content)) > 0),
+    CONSTRAINT chat_messages_status_check  CHECK (status IN ('answered', 'not_in_notes', 'stopped')),
+    -- Which columns belong to which role.
+    CONSTRAINT chat_messages_role_fields_check CHECK (
+        (role = 'user'
+            AND status IS NULL AND model IS NULL
+            AND prompt_tokens IS NULL AND output_tokens IS NULL)
+        OR
+        (role = 'assistant'
+            AND status IS NOT NULL AND search_query IS NULL)
+    ),
+    CONSTRAINT chat_messages_tokens_check CHECK (
+        (prompt_tokens IS NULL OR prompt_tokens >= 0)
+        AND (output_tokens IS NULL OR output_tokens >= 0)
+    )
 );
 
 
@@ -276,13 +299,16 @@ CREATE TABLE chat_messages (
 -- Which chunks an answer was based on (the citations).
 -- A many-to-many link between chat_messages and document_chunks,
 -- so its primary key is the PAIR (message_id, chunk_id).
+-- Every passage SHOWN to the model is stored; rank = its number [n]
+-- in the prompt; cited = the answer actually referenced it.
 -- ============================================================
 
 CREATE TABLE message_sources (
     message_id       UUID             NOT NULL REFERENCES chat_messages(id)   ON DELETE CASCADE,
     chunk_id         UUID             NOT NULL REFERENCES document_chunks(id) ON DELETE CASCADE,
-    rank             SMALLINT         NOT NULL,   -- 1 = most relevant
+    rank             SMALLINT         NOT NULL,   -- 1 = most relevant = [1] in the answer
     similarity_score DOUBLE PRECISION,
+    cited            BOOLEAN          NOT NULL DEFAULT false,
 
     PRIMARY KEY (message_id, chunk_id),
     CONSTRAINT message_sources_rank_unique UNIQUE (message_id, rank),
@@ -300,7 +326,8 @@ CREATE TABLE message_sources (
 -- ============================================================
 
 CREATE INDEX idx_materials_course_id      ON materials(course_id);
-CREATE INDEX idx_chat_sessions_user_id    ON chat_sessions(user_id);
+-- "My chats, most recent first": WHERE user_id = ? ORDER BY updated_at DESC.
+CREATE INDEX idx_chat_sessions_user_recent ON chat_sessions(user_id, updated_at DESC);
 CREATE INDEX idx_chat_sessions_course_id  ON chat_sessions(course_id);
 CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id, created_at);
 CREATE INDEX idx_message_sources_chunk_id ON message_sources(chunk_id);

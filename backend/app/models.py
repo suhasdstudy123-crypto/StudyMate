@@ -280,7 +280,18 @@ class ChatMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = created_at_col()
+    # clock_timestamp() (migration 006): a question and its answer are saved in
+    # one transaction, and now() would give both the same time.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+    # Answers only: answered | not_in_notes | stopped. NULL for questions.
+    status: Mapped[str | None] = mapped_column(String(20))
+    model: Mapped[str | None] = mapped_column(String(100))
+    # Questions only: the rewritten stand-alone question we searched with.
+    search_query: Mapped[str | None] = mapped_column(Text)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
 
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
     sources: Mapped[list["MessageSource"]] = relationship(
@@ -304,8 +315,10 @@ class MessageSource(Base):
         ForeignKey("document_chunks.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    rank: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rank: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # = [n] in the answer
     similarity_score: Mapped[float | None] = mapped_column(Float)
+    # Shown to the model AND referenced in the answer (vs only shown).
+    cited: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
     message: Mapped["ChatMessage"] = relationship(back_populates="sources")
     chunk: Mapped["DocumentChunk"] = relationship()
