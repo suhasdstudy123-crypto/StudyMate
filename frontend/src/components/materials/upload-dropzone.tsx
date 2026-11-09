@@ -50,7 +50,7 @@ export function UploadDropzone({ onFiles, mode, onModeChange, compact = false }:
   }
 
   return (
-    <div className="grid gap-2.5">
+    <div className="grid gap-3">
       <div
         onDragEnter={(e) => {
           e.preventDefault();
@@ -69,38 +69,38 @@ export function UploadDropzone({ onFiles, mode, onModeChange, compact = false }:
           handle(e.dataTransfer.files);
         }}
         className={cn(
-          "relative rounded-lg border-2 border-dashed transition-colors",
-          dragging ? "border-primary bg-primary/6" : "border-border bg-card hover:border-primary/50",
+          "relative rounded-xl border border-dashed transition-colors duration-300",
+          dragging ? "border-primary bg-primary/5" : "border-foreground/20 bg-card hover:border-foreground/40",
         )}
       >
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           className={cn(
-            "flex w-full flex-col items-center justify-center gap-2 rounded-lg text-center outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex w-full flex-col items-center justify-center gap-2 rounded-xl text-center outline-none focus-visible:ring-2 focus-visible:ring-ring",
             compact ? "px-6 py-6 sm:flex-row sm:gap-4" : "px-6 py-12",
           )}
         >
           <span
             className={cn(
-              "grid place-items-center rounded-full bg-primary/10 text-primary transition-transform",
-              compact ? "size-11" : "size-14",
-              dragging && "scale-110",
+              "grid place-items-center rounded-lg bg-muted text-muted-foreground transition-transform duration-300",
+              compact ? "size-10" : "size-12",
+              dragging && "-translate-y-0.5",
             )}
             aria-hidden="true"
           >
-            <FileUp className={compact ? "size-5" : "size-6"} />
+            <FileUp className="size-5" />
           </span>
           <span className={cn("grid gap-1", compact && "sm:text-left")}>
-            <span className="font-bold">
+            <span className="title-3">
               {dragging ? "Drop to upload" : (
                 <>
                   Drop PDFs here or <span className="text-primary underline underline-offset-4">browse</span>
                 </>
               )}
             </span>
-            <span className="text-sm text-muted-foreground">
-              Lecture notes, slides, previous-year papers · up to {MAX_UPLOAD_MB} MB each
+            <span className="caption-2 text-muted-foreground">
+              Lecture notes, slides, previous year papers · up to {MAX_UPLOAD_MB} MB each
             </span>
           </span>
         </button>
@@ -148,17 +148,18 @@ function ModePicker({ mode, onChange }: { mode: ProcessingMode; onChange: (m: Pr
   return (
     <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <legend className="sr-only">How to read pictures in the next uploads</legend>
-      <span className="text-sm font-semibold text-muted-foreground" aria-hidden="true">
+      <span className="caption-1 text-muted-foreground" aria-hidden="true">
         Read pictures:
       </span>
-      <div className="inline-flex rounded-md border bg-card p-0.5">
+      <div className="inline-flex rounded-lg bg-muted p-0.5">
         {MODES.map(({ value, label, Icon }) => (
           <label
             key={value}
             className={cn(
-              "inline-flex cursor-pointer items-center gap-1.5 rounded-[0.4rem] px-3 py-1 text-sm font-semibold transition-colors",
+              // inner radius 6 = outer 8 minus the 2px gap, so the curves stay parallel
+              "inline-flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 body-5 transition-colors",
               "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-              mode === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              mode === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <input
@@ -174,7 +175,7 @@ function ModePicker({ mode, onChange }: { mode: ProcessingMode; onChange: (m: Pr
           </label>
         ))}
       </div>
-      <p className="basis-full text-xs text-muted-foreground sm:basis-auto sm:flex-1" aria-live="polite">
+      <p className="basis-full caption-5 text-muted-foreground sm:basis-auto sm:flex-1" aria-live="polite">
         {current.hint}
       </p>
     </fieldset>

@@ -222,10 +222,10 @@ export default function CoursePage() {
   if (load.state === "missing") {
     return (
       <Centered>
-        <Mascot mood="confused" className="w-24" />
-        <h1 className="mt-5 text-2xl font-extrabold">Course not found</h1>
-        <p className="mt-1 text-muted-foreground">It may have been deleted, or the link is wrong.</p>
-        <Button asChild variant="outline" className="mt-5">
+        <Mascot mood="confused" className="w-14" />
+        <h1 className="mt-4 heading-6">Course not found</h1>
+        <p className="mt-1 body-6 text-muted-foreground">It may have been deleted, or the link is wrong.</p>
+        <Button asChild variant="outline" className="mt-6">
           <Link href="/courses">
             <ArrowLeft aria-hidden="true" /> Back to your courses
           </Link>
@@ -237,12 +237,12 @@ export default function CoursePage() {
   if (load.state === "error") {
     return (
       <Centered>
-        <Mascot mood="confused" className="w-24" />
-        <h1 className="mt-5 text-2xl font-extrabold">Couldn&apos;t open this course</h1>
-        <p className="mt-1 text-muted-foreground">{load.message}</p>
+        <Mascot mood="confused" className="w-14" />
+        <h1 className="mt-4 heading-6">Couldn&apos;t open this course</h1>
+        <p className="mt-1 body-6 text-muted-foreground">{load.message}</p>
         <Button
           variant="outline"
-          className="mt-5"
+          className="mt-6"
           onClick={() => {
             setLoad({ state: "loading" });
             setAttempt((n) => n + 1);
@@ -261,30 +261,32 @@ export default function CoursePage() {
     // content's width, so a long line can't stretch the page wider than a phone.
     <div className="grid grid-cols-1 gap-8">
       <header className="grid gap-4">
-        <Link
-          href="/courses"
-          className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-semibold text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" /> Courses
-        </Link>
+        {/* Breadcrumb: where you are, and the way back */}
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1 caption-2 text-muted-foreground">
+          <Link
+            href="/courses"
+            className="inline-flex items-center gap-1 rounded-md outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" /> Courses
+          </Link>
+          {course?.code && (
+            <>
+              <span aria-hidden="true">/</span>
+              <span className="tabular-nums">{course.code}</span>
+            </>
+          )}
+        </nav>
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4"
         >
           <div className="min-w-0">
-            {course?.code && (
-              <span className="rounded-sm border border-primary/30 bg-primary/8 px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-primary uppercase">
-                {course.code}
-              </span>
-            )}
-            <h1 className="mt-2 text-4xl font-extrabold tracking-[-0.03em] break-words sm:text-5xl">{course?.name}</h1>
-            {course?.description && (
-              <p className="mt-2 max-w-2xl font-serif text-lg text-muted-foreground">{course.description}</p>
-            )}
+            <h1 className="heading-5 break-words sm:heading-4">{course?.name}</h1>
+            {course?.description && <p className="mt-1 max-w-2xl body-3 text-muted-foreground">{course.description}</p>}
             {!empty && (
-              <p className="mt-3 text-sm font-semibold text-muted-foreground">
+              <p className="mt-2 caption-2 text-muted-foreground">
                 {stats.files} {stats.files === 1 ? "file" : "files"} · {stats.pages} pages read · {stats.passages}{" "}
                 searchable passages
               </p>
@@ -292,7 +294,7 @@ export default function CoursePage() {
           </div>
           {/* From your notes straight into a chat about them (Stage 7) */}
           {stats.passages > 0 && (
-            <Button asChild size="lg" className="shadow-[0_8px_24px_-12px_var(--ballpoint)]">
+            <Button asChild>
               <Link href={`/chat?course=${id}`}>
                 <MessageCircleQuestion aria-hidden="true" /> Ask about {course?.name ?? "this course"}
               </Link>
@@ -308,34 +310,32 @@ export default function CoursePage() {
       {stats.passages > 0 && <SearchPanel courseId={id} passages={stats.passages} onOpenPage={openSearchHit} />}
 
       {empty ? (
-        <section className="grid items-center gap-6 rounded-lg border bg-card p-6 sm:p-8 md:grid-cols-[1fr_auto]">
-          <div className="grid gap-5">
-            <div>
-              <h2 className="text-2xl font-extrabold tracking-tight">Add your first notes</h2>
-              <p className="mt-1 text-muted-foreground">
-                StudyMate reads every page, keeps tables whole, and remembers which page each passage came from.
-              </p>
-            </div>
-            <UploadDropzone onFiles={startUploads} mode={mode} onModeChange={changeMode} />
+        <section className="grid gap-6 rounded-xl border bg-card p-4 sm:p-6">
+          <div>
+            <h2 className="heading-6">Add your first notes</h2>
+            <p className="mt-1 body-6 text-muted-foreground">
+              StudyMate reads every page, keeps tables whole, and remembers which page each passage came from.
+            </p>
           </div>
-          <Mascot mood="happy" className="mx-auto hidden w-32 md:block" />
+          <UploadDropzone onFiles={startUploads} mode={mode} onModeChange={changeMode} />
         </section>
       ) : (
         <UploadDropzone onFiles={startUploads} mode={mode} onModeChange={changeMode} compact />
       )}
 
       {notice && (
-        <p role="alert" className="-mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm font-medium">
+        <p role="alert" className="-mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 body-5">
           {notice}
         </p>
       )}
 
       {!empty && (
         <section aria-labelledby="files-heading" className="grid grid-cols-1 gap-3">
-          <h2 id="files-heading" className="text-xl font-bold">
+          <h2 id="files-heading" className="heading-6">
             Files
           </h2>
-          <ul className="grid grid-cols-1 gap-3">
+          {/* One panel, one row per file, divided by lines: easier to scan than a stack of cards */}
+          <ul className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card">
             <AnimatePresence initial={false}>
               {uploads.map((u) => (
                 <UploadRow
@@ -394,11 +394,11 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 function PageSkeleton() {
   return (
-    <div className="grid animate-pulse gap-6" aria-busy="true" aria-label="Loading course">
-      <div className="h-4 w-20 rounded bg-muted" />
-      <div className="h-12 w-2/3 rounded bg-muted" />
-      <div className="h-28 rounded-lg bg-muted" />
-      <div className="h-20 rounded-lg bg-muted" />
+    <div className="grid gap-6" aria-busy="true" aria-label="Loading course">
+      <div className="skeleton h-4 w-20 rounded" />
+      <div className="skeleton h-9 w-2/3 rounded-md" />
+      <div className="skeleton h-28 rounded-xl" />
+      <div className="skeleton h-20 rounded-xl" />
     </div>
   );
 }

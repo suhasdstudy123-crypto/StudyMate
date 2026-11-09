@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 /*
   The first page after logging in (redesigned in Stage 7).
 
-    hero        greeting + Marky + a quick "ask your notes" box
+    greeting    "Good afternoon, Suhas" + a quick "ask your notes" box
                 (sends you to /chat with the question, which asks it at once)
     numbers     courses, files, passages, questions: counted from real data
     left        your recent chats (open / delete)
@@ -49,6 +49,9 @@ function greeting() {
 }
 
 const questionsIn = (s: ChatSession) => Math.ceil(s.message_count / 2);
+
+// One curve for every movement on the site (same as --ease-soft in globals.css)
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -108,22 +111,14 @@ export default function DashboardPage() {
 
   return (
     <div className="grid grid-cols-1 gap-8">
-      {/* ---------- hero ---------- */}
-      <motion.section
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="ruled relative overflow-hidden rounded-2xl border bg-card px-6 py-8 sm:px-10 sm:py-10"
-      >
-        {/* a margin line, like a real notebook page */}
-        <span aria-hidden="true" className="absolute inset-y-0 left-4 w-px bg-highlight/50 sm:left-6" />
-        <div className="relative grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_auto]">
+      {/* ---------- greeting + quick ask ---------- */}
+      <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}>
+        <div className="grid items-center gap-6">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-muted-foreground">{greeting()},</p>
-            <h1 className="mt-1 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              <span className="highlight">{firstName || "there"}</span>.
+            <h1 className="heading-5 sm:heading-4">
+              {greeting()}, {firstName || "there"}
             </h1>
-            <p className="mt-3 max-w-xl text-pretty text-lg text-muted-foreground">
+            <p className="mt-2 max-w-xl body-3 text-muted-foreground">
               {!loaded
                 ? "Opening your notes…"
                 : withNotes.length > 0
@@ -134,7 +129,7 @@ export default function DashboardPage() {
             </p>
             <div className="mt-6">
               {!loaded ? (
-                <div className="h-14 max-w-2xl animate-pulse rounded-2xl bg-muted" />
+                <div className="skeleton h-14 max-w-2xl rounded-xl" />
               ) : withNotes.length > 0 ? (
                 <QuickAsk courses={withNotes} />
               ) : (
@@ -147,16 +142,18 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-          <Mascot mood={numbers.questions > 0 ? "happy" : "wave"} className="hidden w-36 md:block lg:w-44" />
         </div>
       </motion.section>
 
-      {/* ---------- numbers ---------- */}
-      <section aria-label="Your numbers" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* ---------- numbers: one strip, divided, instead of four floating cards ---------- */}
+      <section
+        aria-label="Your numbers"
+        className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card lg:grid-cols-4 [&>*]:border-border max-lg:[&>*:nth-child(-n+2)]:border-b max-lg:[&>*:nth-child(odd)]:border-r lg:[&>*:not(:last-child)]:border-r"
+      >
         <Stat icon={BookOpen} label="Courses" value={numbers.courses} loaded={loaded} delay={0.05} />
         <Stat icon={FileText} label="Files read" value={numbers.files} loaded={loaded} delay={0.1} />
         <Stat icon={Layers} label="Searchable passages" value={numbers.passages} loaded={loaded} delay={0.15} />
-        <Stat icon={MessagesSquare} label="Questions asked" value={numbers.questions} loaded={loaded} delay={0.2} highlight />
+        <Stat icon={MessagesSquare} label="Questions asked" value={numbers.questions} loaded={loaded} delay={0.2} />
       </section>
 
       {/* ---------- getting started: only while something is left ---------- */}
@@ -181,8 +178,8 @@ export default function DashboardPage() {
         description={toDelete?.title ?? "Untitled chat"}
         className="max-w-md"
       >
-        <p className="text-sm text-muted-foreground">The questions and answers are deleted. Your notes are not touched.</p>
-        <div className="mt-5 flex justify-end gap-2">
+        <p className="body-6 text-muted-foreground">The questions and answers are deleted. Your notes are not touched.</p>
+        <div className="mt-6 flex justify-end gap-2">
           <Button variant="outline" onClick={() => setToDelete(null)} disabled={deleting} data-autofocus>
             Keep it
           </Button>
@@ -209,7 +206,7 @@ function QuickAsk({ courses }: { courses: Course[] }) {
         if (!question) return;
         router.push(`/chat?course=${courseId}&ask=${encodeURIComponent(question.slice(0, MAX_QUESTION_CHARS))}`);
       }}
-      className="flex max-w-2xl flex-col gap-2 rounded-2xl border bg-background p-2 shadow-[0_10px_30px_-16px_color-mix(in_oklab,var(--ink)_45%,transparent)] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20 sm:flex-row sm:items-center"
+      className="flex max-w-2xl flex-col gap-2 rounded-xl border bg-card p-2 shadow-sm transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 sm:flex-row sm:items-center"
     >
       {courses.length > 1 && (
         <>
@@ -220,7 +217,7 @@ function QuickAsk({ courses }: { courses: Course[] }) {
             id="quick-course"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
-            className="h-10 rounded-xl bg-muted px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-44"
+            className="h-10 rounded-lg bg-muted px-2 body-5 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-48"
           >
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
@@ -240,15 +237,15 @@ function QuickAsk({ courses }: { courses: Course[] }) {
           onChange={(e) => setText(e.target.value)}
           maxLength={MAX_QUESTION_CHARS}
           placeholder={`Ask about ${courses.find((c) => c.id === courseId)?.name ?? "your notes"}…`}
-          className="h-10 min-w-0 flex-1 bg-transparent px-2 text-base outline-none placeholder:text-muted-foreground/70"
+          className="h-10 min-w-0 flex-1 bg-transparent px-2 body-3 outline-none placeholder:text-muted-foreground"
         />
         <button
           type="submit"
           disabled={!question}
           aria-label="Ask"
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground outline-none transition-[transform,opacity] hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:scale-100 disabled:opacity-40"
+          className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground outline-none transition-[transform,opacity] hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-40"
         >
-          <ArrowUp className="size-5" aria-hidden="true" />
+          <ArrowUp className="size-4" aria-hidden="true" />
         </button>
       </div>
     </form>
@@ -266,7 +263,7 @@ function CountUp({ value }: { value: number }) {
     }
     const controls = animate(0, value, {
       duration: Math.min(1.2, 0.4 + value / 400),
-      ease: "easeOut",
+      ease: EASE,
       onUpdate: (v) => setShown(Math.round(v)),
     });
     return () => controls.stop();
@@ -280,34 +277,26 @@ function Stat({
   value,
   loaded,
   delay,
-  highlight = false,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   loaded: boolean;
   delay: number;
-  highlight?: boolean;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      className="rounded-xl border bg-card p-4 sm:p-5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5, delay, ease: EASE }}
+      className="p-4"
     >
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <Icon className="size-4 text-primary" />
+      <p className="flex items-center gap-2 caption-2 text-muted-foreground">
+        <Icon className="size-4" />
         {label}
       </p>
-      <p className="mt-2 text-3xl font-extrabold tabular-nums tracking-tight sm:text-4xl">
-        {loaded ? (
-          <span className={cn(highlight && value > 0 && "highlight")}>
-            <CountUp value={value} />
-          </span>
-        ) : (
-          <span className="inline-block h-9 w-14 animate-pulse rounded-md bg-muted align-middle" />
-        )}
+      <p className="mt-1 heading-5 tabular-nums">
+        {loaded ? <CountUp value={value} /> : <span className="skeleton inline-block h-8 w-12 rounded-md align-middle" />}
       </p>
     </motion.div>
   );
@@ -320,17 +309,17 @@ function GettingStarted({ steps }: { steps: Step[] }) {
   const next = steps.findIndex((s) => !s.done);
   return (
     <motion.section
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
+      transition={{ duration: 0.6, delay: 0.1, ease: EASE }}
       aria-labelledby="getting-started"
-      className="rounded-xl border bg-card p-5"
+      className="rounded-xl border bg-card p-4"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="getting-started" className="font-bold">
+        <h2 id="getting-started" className="title-3">
           Getting started
         </h2>
-        <p className="text-sm font-semibold text-muted-foreground">
+        <p className="caption-2 text-muted-foreground">
           {done} of {steps.length} done
         </p>
       </div>
@@ -341,21 +330,21 @@ function GettingStarted({ steps }: { steps: Step[] }) {
             <>
               <span
                 className={cn(
-                  "grid size-7 shrink-0 place-items-center rounded-full border-2 text-xs font-black",
-                  s.done && "border-primary bg-primary text-primary-foreground",
-                  isNext && "border-highlight bg-highlight text-highlight-foreground",
+                  "grid size-6 shrink-0 place-items-center rounded-full border caption-3 tabular-nums",
+                  s.done && "border-success bg-success text-card",
+                  isNext && "border-primary text-primary",
                   !s.done && !isNext && "text-muted-foreground",
                 )}
               >
                 {s.done ? <Check className="size-3.5" aria-label="Done" /> : i + 1}
               </span>
-              <span className={cn("text-sm font-semibold", s.done && "text-muted-foreground line-through")}>{s.title}</span>
+              <span className={cn("body-5", s.done && "text-muted-foreground line-through")}>{s.title}</span>
               {isNext && s.href && <ArrowRight className="ml-auto size-4 text-primary" aria-hidden="true" />}
             </>
           );
           const cls = cn(
-            "flex h-full items-center gap-2.5 rounded-lg border p-3",
-            isNext ? "border-highlight/70 bg-highlight/10" : "bg-background",
+            "flex h-full items-center gap-2 rounded-lg border p-3",
+            isNext ? "border-primary/50 bg-card" : "bg-background",
           );
           return (
             <li key={s.title}>
@@ -391,19 +380,19 @@ function RecentChats({
   const recent = (chats ?? []).slice(0, 5);
   return (
     <motion.section
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.25 }}
+      transition={{ duration: 0.6, delay: 0.15, ease: EASE }}
       aria-labelledby="recent-chats"
     >
-      <div className="flex items-end justify-between gap-4">
-        <h2 id="recent-chats" className="text-xl font-bold">
+      <div className="flex items-center justify-between gap-4">
+        <h2 id="recent-chats" className="heading-6">
           Recent chats
         </h2>
         {firstCourse && (
           <Link
             href={`/chat?course=${firstCourse.id}`}
-            className="inline-flex items-center gap-1 text-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-1 rounded-md body-5 text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           >
             New chat <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
@@ -411,15 +400,15 @@ function RecentChats({
       </div>
 
       {chats === null ? (
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid gap-px overflow-hidden rounded-xl border">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[4.5rem] animate-pulse rounded-xl bg-muted" />
+            <div key={i} className="skeleton h-16" />
           ))}
         </div>
       ) : recent.length === 0 ? (
         <NoChatsYet course={firstCourse} />
       ) : (
-        <ul className="mt-4 grid gap-2">
+        <ul className="mt-4 divide-y overflow-hidden rounded-xl border bg-card">
           {recent.map((s, i) => {
             const course = courses.find((c) => c.id === s.course_id);
             const n = questionsIn(s);
@@ -427,21 +416,19 @@ function RecentChats({
               <motion.li
                 key={s.id}
                 layout
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: 0.3 + i * 0.05 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.2 + i * 0.05, ease: EASE }}
                 className="group relative"
               >
                 <Link
                   href={`/chat?course=${s.course_id ?? ""}&session=${s.id}`}
-                  className="flex items-center gap-3 rounded-xl border bg-card py-3 pl-4 pr-14 outline-none transition-[border-color,transform] hover:-translate-y-0.5 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-3 py-3 pl-4 pr-12 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-                    <MessageCircleQuestion className="size-4" aria-hidden="true" />
-                  </span>
+                  <MessageCircleQuestion className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{s.title ?? "Untitled chat"}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate title-4">{s.title ?? "Untitled chat"}</span>
+                    <span className="block truncate caption-5 text-muted-foreground">
                       {course?.name ?? s.course_name ?? "Deleted course"} · {n} {n === 1 ? "question" : "questions"} ·{" "}
                       {timeAgo(s.updated_at)}
                     </span>
@@ -451,7 +438,7 @@ function RecentChats({
                   type="button"
                   onClick={() => onDelete(s)}
                   aria-label={`Delete chat: ${s.title ?? "Untitled chat"}`}
-                  className="absolute right-3 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-60 outline-none transition-[opacity,color] hover:bg-muted hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                  className="absolute right-3 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground opacity-60 outline-none transition-[opacity,color,background-color] hover:bg-background hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
                 >
                   <Trash2 className="size-4" aria-hidden="true" />
                 </button>
@@ -480,9 +467,9 @@ function NoChatsYet({ course }: { course: Course | null }) {
 
   return (
     <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed p-6 text-center">
-      <Mascot mood="peek" className="w-16" />
-      <p className="mt-3 font-semibold">No questions yet</p>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <Mascot mood="peek" className="w-12" />
+      <p className="mt-3 title-3">No questions yet</p>
+      <p className="mt-1 body-6 text-muted-foreground">
         {course ? `Try one about ${course.name}:` : "Upload notes to a course first, then ask about them."}
       </p>
       {course && (
@@ -491,7 +478,7 @@ function NoChatsYet({ course }: { course: Course | null }) {
             <Link
               key={q}
               href={`/chat?course=${course.id}&ask=${encodeURIComponent(q)}`}
-              className="rounded-full border bg-card px-3.5 py-1.5 text-sm font-semibold outline-none transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-lg border bg-card px-3 py-2 body-5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
               {q}
             </Link>
@@ -506,55 +493,50 @@ function YourCourses({ courses }: { courses: Course[] | null }) {
   const shown = (courses ?? []).slice(0, 4);
   return (
     <motion.section
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.3 }}
+      transition={{ duration: 0.6, delay: 0.2, ease: EASE }}
       aria-labelledby="your-courses"
     >
-      <div className="flex items-end justify-between gap-4">
-        <h2 id="your-courses" className="text-xl font-bold">
+      <div className="flex items-center justify-between gap-4">
+        <h2 id="your-courses" className="heading-6">
           Your courses
         </h2>
         <Link
           href="/courses"
-          className="inline-flex items-center gap-1 text-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-1 rounded-md body-5 text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           {courses && courses.length > shown.length ? `All ${courses.length}` : "Manage"}
           <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
       </div>
       {courses === null ? (
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid gap-px overflow-hidden rounded-xl border">
           {[0, 1].map((i) => (
-            <div key={i} className="h-[4.5rem] animate-pulse rounded-xl bg-muted" />
+            <div key={i} className="skeleton h-16" />
           ))}
         </div>
       ) : shown.length === 0 ? (
-        <p className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-4 rounded-xl border border-dashed p-6 text-center body-6 text-muted-foreground">
           No courses yet.{" "}
-          <Link href="/courses" className="font-semibold text-primary hover:underline">
+          <Link href="/courses" className="body-5 text-primary hover:underline">
             Make one
           </Link>
         </p>
       ) : (
-        <ul className="mt-4 grid gap-2">
+        <ul className="mt-4 divide-y overflow-hidden rounded-xl border bg-card">
           {shown.map((c) => (
             <li key={c.id}>
               <Link
                 href={`/courses/${c.id}`}
-                className="flex overflow-hidden rounded-xl border bg-card outline-none transition-[transform,border-color] hover:-translate-y-0.5 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <span aria-hidden="true" className="binding w-4 shrink-0 bg-primary" />
                 <span className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate font-bold">{c.name}</span>
-                    {c.code && (
-                      <span className="shrink-0 rounded-sm border border-primary/30 px-1.5 font-mono text-[0.65rem] font-bold uppercase text-primary">
-                        {c.code}
-                      </span>
-                    )}
+                  <span className="flex items-baseline gap-2">
+                    <span className="truncate title-4">{c.name}</span>
+                    {c.code && <span className="shrink-0 caption-4 text-muted-foreground">{c.code}</span>}
                   </span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1 caption-5 text-muted-foreground">
                     <FileText className="size-3.5" aria-hidden="true" />
                     {c.material_count === 0
                       ? "No files yet"

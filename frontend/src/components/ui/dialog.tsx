@@ -64,32 +64,32 @@ export function Dialog({ open, onClose, title, description, busy = false, classN
         if (e.target === e.currentTarget && pressedOnBackdrop.current && !busy) onClose();
       }}
       className={cn(
-        "dialog-pop m-auto w-[calc(100%-2rem)] max-w-lg overflow-visible rounded-lg border bg-card p-0 text-card-foreground shadow-2xl",
-        "backdrop:bg-[color-mix(in_oklab,var(--ink)_45%,transparent)] backdrop:backdrop-blur-[2px]",
+        "dialog-pop m-auto w-[calc(100%-2rem)] max-w-lg overflow-visible rounded-xl border bg-card p-0 text-card-foreground shadow-xl",
+        "backdrop:bg-black/40",
         className,
       )}
     >
       {/* Only render the content while open, so each opening starts fresh. */}
       {open && (
-        <div className="relative p-6 sm:p-7">
+        <div className="relative p-6">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="absolute top-4 right-4 grid size-8 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="absolute top-4 right-4 grid size-8 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             aria-label="Close"
           >
             <X className="size-4" />
           </button>
-          <h2 id={titleId} className="pr-8 text-xl font-extrabold tracking-tight">
+          <h2 id={titleId} className="pr-8 heading-6">
             {title}
           </h2>
           {description && (
-            <div id={descId} className="mt-1.5 text-sm text-muted-foreground">
+            <div id={descId} className="mt-1 body-6 text-muted-foreground">
               {description}
             </div>
           )}
-          <div className="mt-5">{children}</div>
+          <div className="mt-6">{children}</div>
         </div>
       )}
     </dialog>

@@ -29,8 +29,8 @@ export default function Home() {
           <FinalCta />
         </main>
         <footer className="border-t">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-8 text-sm text-muted-foreground sm:px-8">
-            <span className="inline-flex items-center gap-2 font-semibold text-foreground">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-8 caption-2 text-muted-foreground sm:px-8">
+            <span className="inline-flex items-center gap-2 title-4 text-foreground">
               <LogoMark className="size-5" />
               StudyMate
             </span>

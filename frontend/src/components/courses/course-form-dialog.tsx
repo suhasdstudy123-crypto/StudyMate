@@ -128,7 +128,7 @@ function CourseForm({
   const descLeft = COURSE_LIMITS.description - values.description.length;
 
   return (
-    <form onSubmit={onSubmit} noValidate className="grid gap-5">
+    <form onSubmit={onSubmit} noValidate className="grid gap-4">
       {errors.form && <FormAlert>{errors.form}</FormAlert>}
 
       <FormField
@@ -171,13 +171,13 @@ function CourseForm({
         />
         <p
           id="course-description-msg"
-          className={errors.description ? "text-sm font-medium text-destructive" : "text-xs text-muted-foreground"}
+          className={errors.description ? "caption-1 text-destructive" : "caption-5 text-muted-foreground"}
         >
           {errors.description ?? (descLeft < 200 ? `${descLeft} characters left` : "A short note for yourself.")}
         </p>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
           Cancel
         </Button>

@@ -61,7 +61,7 @@ export function PagesDialog({
       open={material !== null}
       onClose={onClose}
       title="What StudyMate read"
-      description={material ? <span className="font-semibold text-foreground">{material.title}</span> : null}
+      description={material ? <span className="body-5 text-foreground">{material.title}</span> : null}
       className="max-w-5xl"
     >
       {material && (
@@ -144,7 +144,7 @@ function Viewer({
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-6">
       {/* Page list: a column on wide screens, a scrolling strip on phones */}
       <nav aria-label="Pages" className="-mx-1 md:mx-0">
-        <ol ref={listRef} className="flex gap-1.5 overflow-x-auto px-1 pb-2 md:max-h-[60vh] md:flex-col md:overflow-y-auto md:pr-2 md:pb-0">
+        <ol ref={listRef} className="flex gap-1 overflow-x-auto px-1 pb-2 md:max-h-[60vh] md:flex-col md:overflow-y-auto md:pr-2 md:pb-0">
           {(pages ?? []).map((p) => (
             <li key={p.page_number} className="shrink-0">
               <button
@@ -155,8 +155,8 @@ function Viewer({
                 }}
                 aria-current={p.page_number === current ? "page" : undefined}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                  p.page_number === current ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left body-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                  p.page_number === current ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
                 <span className="tabular-nums">Page {p.page_number}</span>
@@ -172,10 +172,13 @@ function Viewer({
 
       <section aria-live="polite" className="min-h-64 md:max-h-[60vh] md:overflow-y-auto md:pr-1">
         {error ? (
-          <p className="text-sm font-medium text-destructive">{error}</p>
+          <p className="body-5 text-destructive">{error}</p>
         ) : loading || !detail ? (
-          <div className="grid h-40 place-items-center text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" aria-label="Loading" />
+          // Placeholders shaped like the passages that are about to appear
+          <div className="grid gap-3" role="status" aria-label="Loading">
+            <div className="skeleton h-4 w-40 rounded" />
+            <div className="skeleton h-28 rounded-lg" />
+            <div className="skeleton h-20 rounded-lg" />
           </div>
         ) : (
           <PageView
@@ -230,7 +233,7 @@ function PageView({
   const [pictureLoaded, setPictureLoaded] = useState(false);
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
+      <p className="caption-2 text-muted-foreground">
         Page {page.page_number} · {chunks.length} {chunks.length === 1 ? "passage" : "passages"}
         {page.table_count > 0 && ` · ${page.table_count} ${page.table_count === 1 ? "table" : "tables"}`}
       </p>
@@ -248,7 +251,7 @@ function PageView({
       )}
 
       {chunks.length === 0 ? (
-        <p className="rounded-md border bg-background px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border bg-background px-4 py-6 text-center body-6 text-muted-foreground">
           No text on this page.
         </p>
       ) : (
@@ -290,11 +293,11 @@ function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promi
   }[page.vision_status];
 
   return (
-    <div className="flex items-start gap-2.5 rounded-md border border-dashed bg-muted/60 px-3.5 py-3 text-sm">
+    <div className="flex items-start gap-2 rounded-lg border bg-muted px-3 py-3 body-6">
       {page.vision_status === "done" ? (
-        <ScanEye className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <ScanEye className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       ) : page.vision_status === "processing" ? (
-        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : (
         <ImageOff
           className={cn("mt-0.5 size-4 shrink-0", page.vision_status === "failed" ? "text-destructive" : "text-muted-foreground")}
@@ -303,7 +306,7 @@ function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promi
       )}
       <div className="grid gap-2">
         <p>
-          <span className="font-semibold">{what}</span> <span className="text-muted-foreground">{status}</span>
+          <span className="body-4">{what}</span> <span className="text-muted-foreground">{status}</span>
         </p>
         {page.vision_status === "failed" && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -321,7 +324,7 @@ function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promi
                   setRetrying(false);
                 }
               }}
-              className="inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              className="inline-flex h-8 w-fit items-center gap-1 rounded-lg border bg-card px-3 button-sm outline-none transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] disabled:opacity-60"
             >
               {retrying ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -330,8 +333,8 @@ function VisionNote({ page, onRetry }: { page: PageSummary; onRetry: () => Promi
               )}
               Try again
             </button>
-            <span className="text-xs text-muted-foreground">Retries every failed page of this file.</span>
-            {retryError && <span className="text-xs font-medium text-destructive">{retryError}</span>}
+            <span className="caption-5 text-muted-foreground">Retries every failed page of this file.</span>
+            {retryError && <span className="caption-4 text-destructive">{retryError}</span>}
           </div>
         )}
       </div>
@@ -350,13 +353,13 @@ function PagePicture({ src, page, onLoaded }: { src: string; page: number; onLoa
 
   if (state === "error") {
     return (
-      <p className="rounded-md border bg-background px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-lg border bg-background px-4 py-6 text-center body-6 text-muted-foreground">
         The picture of this page couldn&apos;t be loaded.
       </p>
     );
   }
   return (
-    <figure className="overflow-hidden rounded-md border bg-background">
+    <figure className="overflow-hidden rounded-lg border bg-background">
       <a
         href={src}
         target="_blank"
@@ -366,7 +369,7 @@ function PagePicture({ src, page, onLoaded }: { src: string; page: number; onLoa
           state === "loading" && "min-h-48",
         )}
       >
-        {state === "loading" && <span className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />}
+        {state === "loading" && <span className="skeleton absolute inset-0" aria-hidden="true" />}
         {/* eslint-disable-next-line @next/next/no-img-element -- see the comment above PagePicture */}
         <img
           src={src}
@@ -379,9 +382,9 @@ function PagePicture({ src, page, onLoaded }: { src: string; page: number; onLoa
           className="relative block h-auto w-full"
         />
       </a>
-      <figcaption className="flex items-center gap-2 border-t px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
+      <figcaption className="flex items-center gap-2 border-t px-3 py-2 caption-4 text-muted-foreground">
         The page as a picture
-        <a href={src} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 hover:text-foreground">
+        <a href={src} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           Full size <ExternalLink className="size-3" aria-hidden="true" />
         </a>
       </figcaption>
@@ -426,32 +429,32 @@ function ChunkCard({
     <article
       ref={ref}
       className={cn(
-        "rounded-md border bg-background",
-        focused && !cited && "border-primary ring-2 ring-primary/25",
+        "rounded-lg border bg-background",
+        focused && !cited && "border-primary ring-2 ring-primary/20",
         cited && "border-highlight ring-2 ring-highlight/60",
       )}
     >
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2 caption-4 text-muted-foreground">
         {chunk.chunk_type === "table" && <Table2 className="size-3.5" aria-hidden="true" />}
         {chunk.chunk_type === "diagram" && <Workflow className="size-3.5" aria-hidden="true" />}
         Passage {position} of {total}
         {chunk.chunk_type !== "text" && ` · ${chunk.chunk_type}`}
         {focused && !cited && (
-          <span className="inline-flex items-center rounded-sm bg-primary px-1.5 py-px text-primary-foreground">
+          <span className="inline-flex items-center caption-3 text-primary">
             From your search
           </span>
         )}
         {cited && (
-          <span className="inline-flex items-center rounded-sm bg-highlight px-1.5 py-px text-highlight-foreground">
+          <span className="inline-flex items-center rounded-sm bg-highlight px-1 caption-3 text-highlight-foreground">
             Cited in the answer
           </span>
         )}
         {chunk.source === "vision" && (
           // The honest label: this text was written by the image reader, not copied from the PDF.
           // Dashed outline, not highlighter yellow: yellow is reserved for cited text.
-          <span className="inline-flex items-center gap-1 rounded-sm border border-dashed border-primary/60 px-1.5 py-px text-primary">
-            <ScanEye className="size-3" aria-hidden="true" />
-            Read from an image — check it
+          <span className="inline-flex items-center gap-1 text-foreground">
+            <ScanEye className="size-3.5" aria-hidden="true" />
+            Read from an image, check it
           </span>
         )}
         <span className="ml-auto tabular-nums">~{chunk.token_count} tokens</span>
@@ -459,12 +462,12 @@ function ChunkCard({
       {chunk.chunk_type === "table" ? (
         <MarkdownTable content={chunk.content} />
       ) : (
-        <div className="grid gap-2.5 px-3.5 py-3 font-serif text-[0.95rem] leading-relaxed">
+        <div className="grid gap-2 px-3 py-3 font-serif text-base leading-7">
           {splitFences(chunk.content).map((block, i) =>
             block.code !== null ? (
               // A screenshot of SQL / a terminal: exact characters, monospace,
               // line breaks and ASCII table borders kept; scrolls sideways if wide.
-              <pre key={i} className="overflow-x-auto rounded-md bg-muted px-3 py-2.5 font-mono text-[0.8rem] leading-snug">
+              <pre key={i} className="overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs leading-5">
                 {block.code}
               </pre>
             ) : (
@@ -520,13 +523,13 @@ export function MarkdownTable({ content }: { content: string }) {
   const [head, ...body] = rows;
 
   return (
-    <div className="overflow-x-auto px-3.5 py-3">
-      {caption && <p className="mb-2 text-sm font-bold">{caption}</p>}
+    <div className="overflow-x-auto px-3 py-3">
+      {caption && <p className="mb-2 title-4">{caption}</p>}
       <table className="w-full border-collapse font-serif text-sm">
         <thead>
           <tr>
             {head?.map((cell, i) => (
-              <th key={i} className="border bg-muted px-2.5 py-1.5 text-left font-sans font-bold">
+              <th key={i} className="border bg-muted px-3 py-2 text-left font-sans font-semibold">
                 {cell}
               </th>
             ))}
@@ -536,7 +539,7 @@ export function MarkdownTable({ content }: { content: string }) {
           {body.map((row, r) => (
             <tr key={r}>
               {row.map((cell, c) => (
-                <td key={c} className="border px-2.5 py-1.5 align-top">
+                <td key={c} className="border px-3 py-2 align-top">
                   {cell}
                 </td>
               ))}

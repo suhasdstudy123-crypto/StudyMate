@@ -35,8 +35,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="grid min-h-dvh place-items-center">
         <div className="flex flex-col items-center gap-4" role="status">
-          <Mascot className="w-24" />
-          <p className="font-semibold text-muted-foreground">Opening your notes...</p>
+          <Mascot className="w-14" />
+          <p className="body-5 text-muted-foreground">Opening your notes...</p>
         </div>
       </div>
     );
@@ -45,7 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-10 sm:px-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8">{children}</main>
     </div>
   );
 }

@@ -2,10 +2,9 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, FileText, Loader2, ScanEye, Search, Sparkles, Table2, WholeWord, Workflow, X } from "lucide-react";
+import { ArrowRight, FileText, Info, Loader2, ScanEye, Search, Sparkles, Table2, WholeWord, Workflow, X } from "lucide-react";
 
 import { MarkdownTable, splitFences } from "@/components/materials/pages-dialog";
-import { Mascot } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { MAX_QUERY_CHARS, queryStems, searchCourse, type SearchHit, type SearchResponse } from "@/lib/search";
@@ -77,12 +76,9 @@ export function SearchPanel({ courseId, passages, onOpenPage }: Props) {
 
   return (
     <section aria-labelledby="search-heading" className="grid grid-cols-1 gap-4">
-      <div className="relative overflow-hidden rounded-lg border bg-card p-4 shadow-[0_1px_0_var(--rule)] sm:p-5">
-        {/* faint ruled lines behind the box: the notebook look of the course cards */}
-        <div className="ruled pointer-events-none absolute inset-0 opacity-40" aria-hidden="true" />
-        <div className="relative grid gap-3">
-          <h2 id="search-heading" className="flex items-center gap-2 text-xl font-bold">
-            <Search className="size-5 text-primary" aria-hidden="true" />
+      <div className="rounded-xl border bg-card p-4">
+        <div className="grid gap-3">
+          <h2 id="search-heading" className="title-3">
             Search your notes
           </h2>
           <form onSubmit={run} role="search" className="flex flex-col gap-2 sm:flex-row">
@@ -97,25 +93,29 @@ export function SearchPanel({ courseId, passages, onOpenPage }: Props) {
                 aria-label="Search your notes"
                 aria-describedby={hintId}
                 enterKeyHint="search"
-                className="h-12 w-full min-w-0 rounded-md border border-input bg-background pr-10 pl-3.5 text-base outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25"
+                className="h-10 w-full min-w-0 rounded-lg border border-input bg-background pr-10 pl-10 body-3 outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 sm:body-6"
+              />
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
               />
               {text && (
                 <button
                   type="button"
                   onClick={clear}
-                  className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute top-1/2 right-1 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear the search"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
               )}
             </div>
-            <Button type="submit" size="lg" disabled={state.kind === "loading"} className="sm:w-32">
-              {state.kind === "loading" ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}
+            <Button type="submit" variant="outline" disabled={state.kind === "loading"} className="sm:w-28">
+              {state.kind === "loading" && <Loader2 className="animate-spin" aria-hidden="true" />}
               Search
             </Button>
           </form>
-          <p id={hintId} className="text-sm text-muted-foreground">
+          <p id={hintId} className="caption-2 text-muted-foreground">
             Ask in your own words, or type an exact term like an error code. Searches {passages}{" "}
             {passages === 1 ? "passage" : "passages"} by meaning and by keywords.
           </p>
@@ -125,7 +125,7 @@ export function SearchPanel({ courseId, passages, onOpenPage }: Props) {
       <div aria-live="polite" className="grid grid-cols-1 gap-3">
         {state.kind === "loading" && <LoadingCards />}
         {state.kind === "error" && (
-          <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm font-medium">
+          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 body-5">
             {state.message}
           </p>
         )}
@@ -140,10 +140,9 @@ function Results({ data, onOpenPage }: { data: SearchResponse; onOpenPage: (hit:
 
   if (data.results.length === 0) {
     return (
-      <div className="flex flex-col items-center rounded-lg border border-dashed bg-card px-6 py-8 text-center">
-        <Mascot mood="confused" className="w-20" />
-        <p className="mt-4 font-bold">Nothing in your notes matches “{data.query}”.</p>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">
+      <div className="flex flex-col items-center rounded-xl border border-dashed bg-card px-6 py-8 text-center">
+        <p className="title-3">Nothing in your notes matches “{data.query}”.</p>
+        <p className="mt-1 max-w-md body-6 text-muted-foreground">
           Try other words. If you just uploaded a file, it may still be being read.
         </p>
       </div>
@@ -152,18 +151,18 @@ function Results({ data, onOpenPage }: { data: SearchResponse; onOpenPage: (hit:
 
   return (
     <>
-      <p className="text-sm text-muted-foreground">
-        <span className="font-semibold text-foreground">
+      <p className="caption-2 text-muted-foreground">
+        <span className="caption-1 text-foreground">
           {data.results.length} {data.results.length === 1 ? "passage" : "passages"}
         </span>{" "}
         for “{data.query}” · {data.took_ms < 1000 ? `${data.took_ms} ms` : `${(data.took_ms / 1000).toFixed(1)} s`} ·{" "}
         {data.mode === "hybrid" ? "by meaning and keywords" : "by keywords only"}
       </p>
       {data.mode === "keywords" && (
-        <p className="flex items-start gap-2 rounded-md border border-dashed bg-muted/60 px-3.5 py-2.5 text-sm">
-          <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <p className="flex items-start gap-2 rounded-lg border bg-muted px-3 py-2 body-6">
+          <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span>
-            <span className="font-semibold">Meaning search is still warming up</span>{" "}
+            <span className="body-4">Meaning search is still warming up</span>{" "}
             <span className="text-muted-foreground">
               (the model loads for a few seconds after the server starts). These results only match your exact words;
               search again in a moment.
@@ -175,24 +174,24 @@ function Results({ data, onOpenPage }: { data: SearchResponse; onOpenPage: (hit:
         // Meaning search ALWAYS returns its nearest passages, even when nothing
         // is really about the question. If none of them contains any of the
         // question's words, say so instead of pretending they're answers.
-        <div className="flex items-center gap-3 rounded-md border border-dashed bg-card px-3.5 py-2.5 text-sm">
-          <Mascot mood="confused" className="w-10 shrink-0" />
+        <div className="flex items-start gap-2 rounded-lg border bg-muted px-3 py-2 body-6">
+          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <p>
-            <span className="font-semibold">None of these passages contains your words.</span>{" "}
+            <span className="body-4">None of these passages contains your words.</span>{" "}
             <span className="text-muted-foreground">
               They are only the closest in meaning, so your notes may not cover this. Try other words.
             </span>
           </p>
         </div>
       )}
-      <ol className="grid grid-cols-1 gap-3">
+      <ol className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card">
         <AnimatePresence initial>
           {data.results.map((hit, i) => (
             <motion.li
               key={hit.chunk_id}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: Math.min(i, 6) * 0.05 }}
+              transition={{ duration: 0.5, delay: Math.min(i, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
             >
               <ResultCard hit={hit} position={i + 1} stems={stems} onOpen={() => onOpenPage(hit)} />
             </motion.li>
@@ -218,37 +217,29 @@ function ResultCard({
   const long = hit.content.length > 520 || hit.chunk_type === "table";
 
   return (
-    <article className="group grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border bg-card p-3.5 transition-colors hover:border-primary/40 sm:gap-x-4 sm:p-4">
-      {/* rank number, like a numbered list in a notebook margin */}
-      <span
-        className={cn(
-          "mt-0.5 grid size-7 place-items-center rounded-full font-mono text-xs font-bold tabular-nums",
-          position === 1 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-        )}
-        aria-label={`Result ${position}`}
-      >
+    <article className="group grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 p-4 sm:gap-x-4">
+      {/* rank number: plain, in the margin */}
+      <span className="w-5 pt-0.5 text-right caption-4 tabular-nums text-muted-foreground" aria-label={`Result ${position}`}>
         {position}
       </span>
 
-      <div className="grid min-w-0 gap-2.5">
-        <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-          <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
+      <div className="grid min-w-0 gap-2">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 caption-2">
+          <span className="inline-flex min-w-0 items-center gap-1 title-4">
             <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="truncate">{hit.material_title}</span>
           </span>
-          <span className="rounded-sm border px-1.5 py-px font-mono text-xs font-bold text-muted-foreground">
-            p. {hit.page_number}
-          </span>
+          <span className="caption-4 tabular-nums text-muted-foreground">p. {hit.page_number}</span>
           {hit.chunk_type === "table" && <Tag icon={Table2}>table</Tag>}
           {hit.chunk_type === "diagram" && <Tag icon={Workflow}>diagram</Tag>}
           {hit.source === "vision" && (
             // Same honest label as the reading viewer; dashed ink, never highlighter yellow.
-            <span className="inline-flex items-center gap-1 rounded-sm border border-dashed border-primary/60 px-1.5 py-px text-xs font-semibold text-primary">
-              <ScanEye className="size-3" aria-hidden="true" />
-              Read from an image — check it
+            <span className="inline-flex items-center gap-1 caption-4 text-muted-foreground">
+              <ScanEye className="size-3.5" aria-hidden="true" />
+              Read from an image, check it
             </span>
           )}
-          <span className="flex w-full flex-wrap gap-1.5 sm:ml-auto sm:w-auto">
+          <span className="flex w-full flex-wrap gap-3 sm:ml-auto sm:w-auto">
             {hit.meaning_rank !== null && (
               <FoundBy
                 icon={Sparkles}
@@ -272,14 +263,14 @@ function ResultCard({
           )}
         >
           {hit.chunk_type === "table" ? (
-            <div className="-mx-3.5 rounded-md">
+            <div className="rounded-md">
               <MarkdownTable content={hit.content} />
             </div>
           ) : (
-            <div className="grid gap-2 font-serif text-[0.95rem] leading-relaxed">
+            <div className="grid gap-2 font-serif text-base leading-7">
               {splitFences(hit.content).map((block, i) =>
                 block.code !== null ? (
-                  <pre key={i} className="overflow-x-auto rounded-md bg-muted px-3 py-2.5 font-mono text-[0.8rem] leading-snug">
+                  <pre key={i} className="overflow-x-auto rounded-lg bg-muted px-3 py-2 font-mono text-xs leading-5">
                     {block.code}
                   </pre>
                 ) : (
@@ -298,7 +289,7 @@ function ResultCard({
               type="button"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
-              className="rounded-md text-sm font-semibold text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-md body-5 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               {expanded ? "Show less" : "Show all"}
             </button>
@@ -306,10 +297,10 @@ function ResultCard({
           <button
             type="button"
             onClick={onOpen}
-            className="inline-flex items-center gap-1 rounded-md text-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-1 rounded-md body-5 text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           >
             Open page {hit.page_number}
-            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden="true" />
           </button>
         </footer>
       </div>
@@ -319,7 +310,7 @@ function ResultCard({
 
 function Tag({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+    <span className="inline-flex items-center gap-1 caption-4 text-muted-foreground">
       <Icon className="size-3.5" aria-hidden="true" />
       {children}
     </span>
@@ -330,9 +321,9 @@ function FoundBy({ icon: Icon, title, children }: { icon: React.ElementType; tit
   return (
     <span
       title={title}
-      className="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-0.5 text-xs font-semibold text-primary"
+      className="inline-flex items-center gap-1 caption-5 text-muted-foreground"
     >
-      <Icon className="size-3" aria-hidden="true" />
+      <Icon className="size-3.5" aria-hidden="true" />
       {children}
       <span className="sr-only">. {title}</span>
     </span>
@@ -354,7 +345,7 @@ function Bolded({ text, stems }: { text: string; stems: string[] }) {
     const start = m.index ?? 0;
     if (start > last) parts.push(text.slice(last, start));
     parts.push(
-      <strong key={start} className="font-semibold text-foreground underline decoration-primary/40 decoration-2 underline-offset-[3px]">
+      <strong key={start} className="font-semibold text-foreground underline decoration-foreground/30 decoration-1 underline-offset-4">
         {m[0]}
       </strong>,
     );
@@ -366,14 +357,14 @@ function Bolded({ text, stems }: { text: string; stems: string[] }) {
 
 function LoadingCards() {
   return (
-    <div className="grid gap-3" aria-busy="true" aria-label="Searching">
+    <div className="grid divide-y overflow-hidden rounded-xl border bg-card" aria-busy="true" aria-label="Searching">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="grid animate-pulse grid-cols-[auto_1fr] gap-3 rounded-lg border bg-card p-4">
-          <div className="size-7 rounded-full bg-muted" />
-          <div className="grid gap-2.5">
-            <div className="h-4 w-1/2 rounded bg-muted" />
-            <div className="h-3 w-full rounded bg-muted" />
-            <div className="h-3 w-5/6 rounded bg-muted" />
+        <div key={i} className="grid grid-cols-[auto_1fr] gap-3 p-4">
+          <div className="skeleton size-5 rounded" />
+          <div className="grid gap-2">
+            <div className="skeleton h-4 w-1/2 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
+            <div className="skeleton h-3 w-5/6 rounded" />
           </div>
         </div>
       ))}

@@ -66,7 +66,7 @@ function RenameForm({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="grid gap-5">
+    <form onSubmit={onSubmit} noValidate className="grid gap-4">
       <FormField
         id="material-title"
         label="Name"
@@ -136,7 +136,7 @@ export function DeleteMaterialDialog({
       title={`Delete "${material?.title ?? ""}"?`}
       description="The PDF and everything StudyMate read from it are removed. Answers won't use it any more. This can't be undone."
     >
-      <div className="grid gap-5">
+      <div className="grid gap-4">
         {error && <FormAlert>{error}</FormAlert>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={close} disabled={busy} data-autofocus>

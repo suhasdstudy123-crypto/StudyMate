@@ -76,12 +76,12 @@ export function Composer({
         e.preventDefault();
         submit();
       }}
-      className="grid gap-1.5"
+      className="grid gap-2"
     >
       <div
         className={cn(
-          "flex items-end gap-2 rounded-2xl border bg-card p-2 pl-4 shadow-[0_6px_24px_-12px_color-mix(in_oklab,var(--ink)_35%,transparent)] transition-[border-color,box-shadow]",
-          "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20",
+          "flex items-end gap-2 rounded-xl border bg-card p-2 pl-3 shadow-sm transition-[border-color,box-shadow]",
+          "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
           tooLong && "border-destructive",
         )}
       >
@@ -104,14 +104,14 @@ export function Composer({
             }
           }}
           aria-invalid={tooLong || undefined}
-          className="max-h-42 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed sm:text-[0.95rem]"
+          className="max-h-42 min-h-10 flex-1 resize-none bg-transparent py-2 body-3 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
         />
         {streaming ? (
           <button
             type="button"
             onClick={onStop}
             aria-label="Stop the answer"
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-transform outline-none hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="grid size-10 shrink-0 place-items-center rounded-lg bg-foreground text-background transition-[transform,opacity] outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98]"
           >
             <Square className="size-3.5 fill-current" aria-hidden="true" />
           </button>
@@ -120,17 +120,17 @@ export function Composer({
             type="submit"
             disabled={!canSend}
             aria-label="Ask"
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-[transform,opacity] outline-none hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:scale-100 disabled:opacity-40"
+            className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-[transform,opacity,background-color] outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-40"
           >
-            <ArrowUp className="size-5" aria-hidden="true" />
+            <ArrowUp className="size-4" aria-hidden="true" />
           </button>
         )}
       </div>
       <p
         className={cn(
-          "px-3 text-xs",
-          notice && noticeTone === "error" && "font-semibold text-destructive",
-          notice && noticeTone === "info" && "font-semibold text-primary",
+          "px-3 caption-5",
+          notice && noticeTone === "error" && "caption-4 text-destructive",
+          notice && noticeTone === "info" && "caption-4 text-foreground",
           !notice && "text-muted-foreground",
         )}
       >

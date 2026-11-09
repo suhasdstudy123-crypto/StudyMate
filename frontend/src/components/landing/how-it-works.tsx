@@ -1,21 +1,21 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useScroll, useTransform, type Variants } from "motion/react";
+import { motion, type Variants } from "motion/react";
 import { Check, FileText, SendHorizontal } from "lucide-react";
 
 /*
-  Three steps. Each card plays a small animation the first time it scrolls
-  into view (whileInView + viewport once). The line along the top fills
-  as you scroll through the section (useScroll -> scaleX).
+  Three steps. Each card rises in the first time it scrolls into view
+  (whileInView + viewport once), then its small picture plays once.
 */
 
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 const card: Variants = {
-  hidden: { opacity: 0, y: 40 },
+  hidden: { opacity: 0, y: 32 },
   show: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, delay: i * 0.15, ease: [0.2, 0.7, 0.2, 1] },
+    transition: { duration: 0.7, delay: i * 0.1, ease: EASE },
   }),
 };
 
@@ -38,30 +38,21 @@ const STEPS = [
 ];
 
 export function HowItWorks() {
-  const ref = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 75%", "end 55%"] });
-  const lineScale = useTransform(scrollYProgress, [0, 1], [0, 1]);
-
   return (
-    <section ref={ref} className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 lg:py-28" aria-labelledby="how-heading">
+    <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-8 lg:py-24" aria-labelledby="how-heading">
       <motion.h2
         id="how-heading"
-        className="text-3xl font-extrabold tracking-tight sm:text-4xl"
-        initial={{ opacity: 0, y: 20 }}
+        className="heading-5 sm:heading-4"
+        initial={{ opacity: 0, y: 32 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.8 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.7, ease: EASE }}
       >
         How it works
       </motion.h2>
 
-      <div className="relative mt-12">
-        {/* progress line behind the step numbers (wide screens only) */}
-        <div aria-hidden="true" className="absolute left-0 right-0 top-[1.15rem] hidden h-[3px] rounded-full bg-border sm:block">
-          <motion.div className="h-full origin-left rounded-full bg-primary" style={{ scaleX: lineScale }} />
-        </div>
-
-        <ol className="relative grid gap-12 sm:grid-cols-3 sm:gap-8">
+      <div className="mt-8">
+        <ol className="grid gap-8 sm:grid-cols-3">
           {STEPS.map(({ title, body, Art }, i) => (
             <motion.li
               key={title}
@@ -71,14 +62,14 @@ export function HowItWorks() {
               whileInView="show"
               viewport={{ once: true, amount: 0.4 }}
             >
-              <span className="relative inline-grid size-10 place-items-center rounded-full border-2 border-foreground bg-background text-lg font-black tabular-nums text-primary">
-                {i + 1}
-              </span>
-              <div className="mt-6 h-40 overflow-hidden rounded-lg border bg-card">
+              <div className="h-40 overflow-hidden rounded-xl border bg-card">
                 <Art />
               </div>
-              <h3 className="mt-5 text-lg font-bold">{title}</h3>
-              <p className="mt-2 leading-relaxed text-muted-foreground">{body}</p>
+              <h3 className="mt-4 title-2">
+                <span className="mr-2 tabular-nums text-muted-foreground">{i + 1}.</span>
+                {title}
+              </h3>
+              <p className="mt-1 body-3 text-muted-foreground">{body}</p>
             </motion.li>
           ))}
         </ol>
@@ -98,33 +89,33 @@ export function HowItWorks() {
 function UploadArt() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
-      <div className="relative grid h-20 w-full place-items-center rounded-md border-2 border-dashed border-primary/40">
+      <div className="relative grid h-20 w-full place-items-center rounded-lg border border-dashed">
         <motion.div
-          className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-semibold shadow-sm"
+          className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 title-4"
           variants={{
-            hidden: { y: -70, rotate: -8, opacity: 0 },
-            show: { y: 0, rotate: 0, opacity: 1, transition: { type: "spring", stiffness: 200, damping: 14, delay: 0.5 } },
+            hidden: { y: -24, opacity: 0 },
+            show: { y: 0, opacity: 1, transition: { duration: 0.6, delay: 0.5, ease: EASE } },
           }}
         >
-          <FileText className="size-4 text-primary" aria-hidden="true" />
+          <FileText className="size-4 text-muted-foreground" aria-hidden="true" />
           Unit 4 Notes.pdf
         </motion.div>
       </div>
       <div className="flex w-full items-center gap-3">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
           <motion.div
             className="h-full origin-left rounded-full bg-primary"
             variants={{
               hidden: { scaleX: 0 },
-              show: { scaleX: 1, transition: { duration: 1.2, delay: 1.1, ease: "easeInOut" } },
+              show: { scaleX: 1, transition: { duration: 1.2, delay: 1.1, ease: EASE } },
             }}
           />
         </div>
         <motion.span
-          className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+          className="inline-flex items-center gap-1 caption-3 text-success"
           variants={{
-            hidden: { opacity: 0, scale: 0.6 },
-            show: { opacity: 1, scale: 1, transition: { delay: 2.3, type: "spring", stiffness: 300, damping: 15 } },
+            hidden: { opacity: 0 },
+            show: { opacity: 1, transition: { delay: 2.2, duration: 0.3, ease: EASE } },
           }}
         >
           <Check className="size-3.5" aria-hidden="true" /> Ready
@@ -137,9 +128,9 @@ function UploadArt() {
 function AskArt() {
   const text = "explain two-phase locking";
   return (
-    <div className="flex h-full items-center px-5">
-      <div className="flex w-full items-center gap-2 rounded-full border bg-background py-1.5 pl-4 pr-1.5">
-        <span className="flex-1 overflow-hidden whitespace-nowrap text-sm">
+    <div className="flex h-full items-center px-4">
+      <div className="flex w-full items-center gap-2 rounded-lg border bg-background py-1 pl-3 pr-1">
+        <span className="flex-1 overflow-hidden whitespace-nowrap body-6">
           {text.split("").map((ch, i) => (
             <motion.span
               key={i}
@@ -153,10 +144,10 @@ function AskArt() {
           ))}
         </span>
         <motion.span
-          className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground"
+          className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground"
           variants={{
-            hidden: { scale: 0.6, opacity: 0.4 },
-            show: { scale: [0.6, 1.2, 1], opacity: 1, transition: { delay: 0.6 + text.length * 0.045, duration: 0.45 } },
+            hidden: { opacity: 0.4 },
+            show: { opacity: 1, transition: { delay: 0.6 + text.length * 0.045, duration: 0.3, ease: EASE } },
           }}
         >
           <SendHorizontal className="size-4" aria-hidden="true" />
@@ -170,8 +161,8 @@ function CheckArt() {
   const widths = ["92%", "80%", "88%", "70%", "84%"];
   return (
     <div className="relative flex h-full items-center justify-center">
-      <div className="relative h-32 w-28 rounded-md border bg-background p-3 shadow-sm">
-        <div className="flex flex-col gap-2.5">
+      <div className="relative h-32 w-28 rounded-lg border bg-background p-3">
+        <div className="flex flex-col gap-3">
           {widths.map((w, i) => (
             <div key={i} className="relative h-1.5 rounded-full bg-muted-foreground/25" style={{ width: w }}>
               {i === 2 && (
@@ -179,7 +170,7 @@ function CheckArt() {
                   className="absolute -inset-x-1 -inset-y-1 origin-left rounded-sm bg-highlight"
                   variants={{
                     hidden: { scaleX: 0 },
-                    show: { scaleX: 1, transition: { delay: 0.7, duration: 0.8, ease: [0.6, 0, 0.2, 1] } },
+                    show: { scaleX: 1, transition: { delay: 0.7, duration: 0.8, ease: EASE } },
                   }}
                 />
               )}
@@ -187,10 +178,10 @@ function CheckArt() {
           ))}
         </div>
         <motion.span
-          className="absolute -right-6 -top-3 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow"
+          className="absolute -right-8 -top-3 rounded-md border bg-card px-2 py-1 caption-3"
           variants={{
-            hidden: { opacity: 0, scale: 0.4, rotate: -12 },
-            show: { opacity: 1, scale: 1, rotate: 6, transition: { delay: 1.5, type: "spring", stiffness: 320, damping: 14 } },
+            hidden: { opacity: 0, y: 4 },
+            show: { opacity: 1, y: 0, transition: { delay: 1.5, duration: 0.5, ease: EASE } },
           }}
         >
           Page 12

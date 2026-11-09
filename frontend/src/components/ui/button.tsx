@@ -14,21 +14,22 @@ import { cn } from "@/lib/utils";
 */
 const buttonVariants = cva(
   // Classes every button gets. focus-visible: a clear ring for keyboard users.
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg transition-[background-color,color,border-color,transform] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border border-border bg-card text-foreground hover:bg-muted",
+        outline: "border bg-card text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
         link: "text-primary underline-offset-4 hover:underline",
         // Only for actions that destroy data (delete a course). Red = the margin line.
         destructive: "bg-destructive text-white hover:bg-destructive/90 dark:text-background",
       },
       size: {
-        default: "h-10 px-4 text-sm",
-        sm: "h-8 px-3 text-sm",
-        lg: "h-12 px-6 text-base",
+        // Heights come from the spacing scale (32 / 40 / 48); text from the Button styles
+        default: "h-10 px-4 button-sm",
+        sm: "h-8 px-3 button-sm",
+        lg: "h-12 px-6 button-md",
         icon: "size-10",
       },
     },

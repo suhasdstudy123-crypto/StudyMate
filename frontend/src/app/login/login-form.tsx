@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -9,6 +9,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { safeNextPath, useAuth } from "@/components/auth/auth-provider";
 import { FormField, PasswordField } from "@/components/auth/form-field";
 import { FormAlert } from "@/components/auth/form-alert";
+import { SignedInNotice } from "@/components/auth/signed-in-notice";
 import type { MascotMood } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -33,10 +34,9 @@ export function LoginForm() {
   const [peeking, setPeeking] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
 
-  // Already logged in (e.g. opened /login in a new tab)? Go straight in.
-  useEffect(() => {
-    if (status === "authenticated" && !succeeded) router.replace(next);
-  }, [status, succeeded, next, router]);
+  // Already logged in? Don't jump away: show who you are and offer
+  // "Open dashboard" or "Log out" (so you can switch or create an account).
+  const alreadyIn = status === "authenticated" && !succeeded;
 
   // Check the form in the browser first, so obvious mistakes don't need
   // a trip to the server. The backend still validates everything again:
@@ -104,53 +104,57 @@ export function LoginForm() {
       footer={
         <>
           New to StudyMate?{" "}
-          <Link href="/register" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link href="/register" className="body-5 text-primary underline-offset-4 hover:underline">
             Create an account
           </Link>
         </>
       }
     >
       {/* noValidate: we show our own messages instead of the browser's popups */}
-      <form onSubmit={onSubmit} noValidate className="grid gap-5">
-        {errors.form && !errors.email && !errors.password && <FormAlert>{errors.form}</FormAlert>}
+      {alreadyIn ? (
+        <SignedInNotice continueTo={next} />
+      ) : (
+        <form onSubmit={onSubmit} noValidate className="grid gap-4">
+          {errors.form && !errors.email && !errors.password && <FormAlert>{errors.form}</FormAlert>}
 
-        <FormField
-          id="email"
-          label="Email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
-          placeholder="you@example.com"
-          value={email}
-          error={errors.email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            if (hasError) setErrors({});
-          }}
-          onFocus={() => setFocus("email")}
-          onBlur={() => setFocus(null)}
-        />
+          <FormField
+            id="email"
+            label="Email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            value={email}
+            error={errors.email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (hasError) setErrors({});
+            }}
+            onFocus={() => setFocus("email")}
+            onBlur={() => setFocus(null)}
+          />
 
-        <PasswordField
-          id="password"
-          label="Password"
-          autoComplete="current-password"
-          value={password}
-          error={errors.password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            if (hasError) setErrors({});
-          }}
-          onFocus={() => setFocus("password")}
-          onBlur={() => setFocus(null)}
-          onVisibilityChange={setPeeking}
-        />
+          <PasswordField
+            id="password"
+            label="Password"
+            autoComplete="current-password"
+            value={password}
+            error={errors.password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (hasError) setErrors({});
+            }}
+            onFocus={() => setFocus("password")}
+            onBlur={() => setFocus(null)}
+            onVisibilityChange={setPeeking}
+          />
 
-        <Button type="submit" size="lg" className="mt-1 w-full" disabled={submitting || succeeded}>
-          {submitting || succeeded ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-          {succeeded ? "Logged in" : submitting ? "Logging in" : "Log in"}
-        </Button>
-      </form>
+          <Button type="submit" size="lg" className="w-full" disabled={submitting || succeeded}>
+            {submitting || succeeded ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+            {succeeded ? "Logged in" : submitting ? "Logging in" : "Log in"}
+          </Button>
+        </form>
+      )}
     </AuthShell>
   );
 }

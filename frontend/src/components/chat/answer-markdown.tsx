@@ -22,27 +22,104 @@ import { cn } from "@/lib/utils";
 
   Citations: "[2]" in Markdown would be plain text, and "[2][5]" even means
   "a reference link" to Markdown. So before rendering, every [n] outside code
-  becomes a link to "#cite-n", and our own <a> renderer turns those links
-  into citation chips.
+  and formulas becomes a link to "#cite-n", and our own <a> renderer turns
+  those links into citation chips.
 */
 
 const CITE = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
 // Code (fenced or inline) is left alone: "[1]" inside SQL is not a citation.
 const CODE = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g;
+/*
+  Formulas: $$...$$ (display) or $...$ (inline, one line). A "\$" is an
+  escaped dollar sign, not a formula.
+*/
+const MATH = /(\$\$[\s\S]+?\$\$|(?<![\\$])\$(?!\$)[^\n$]+?\$)/g;
+// Citations the model put at the END of a formula, just before the closing $ / $$.
+// A citation follows a space ("... C) [3]$"); "x[2]$" with no space is maths (an index).
+// Groups: 1 = the citations, 2 = whitespace before the closing delimiter (kept), 3 = "$" or "$$".
+const CITES_AT_END = /(\s+\[\d+(?:\s*,\s*\d+)*\](?:\s*\[\d+(?:\s*,\s*\d+)*\])*)(\s*)(\$\$?)$/;
+
+const citeLinks = (nums: string) =>
+  nums
+    .split(",")
+    .map((n) => `[${n.trim()}](#cite-${n.trim()})`)
+    .join("");
+
+/*
+  LLMs often write formulas as \( ... \) and \[ ... \] (LaTeX style), but
+  remark-math only understands $...$ and $$...$$. Convert them. (?<!\\)
+  skips "\\[2pt]", a LaTeX line break with extra spacing, not a formula.
+*/
+function normaliseMathDelimiters(text: string): string {
+  return text
+    .replace(/(?<!\\)\\\[([\s\S]+?)(?<!\\)\\\]/g, (_, body: string) => `$$${body}$$`)
+    .replace(/(?<!\\)\\\(([\s\S]+?)(?<!\\)\\\)/g, (_, body: string) => `$${body}$`);
+}
+
+/*
+  A citation INSIDE a formula ("$A = \tanh(...) [3]$") is not LaTeX: turned
+  into a link it made KaTeX fail and print the raw formula in red. So a
+  citation at the end of a formula is moved just after it. Elsewhere inside
+  a formula "[1]" is left alone: it may be real maths, like an index x[1].
+*/
+function linkOutsideMath(text: string): string {
+  return normaliseMathDelimiters(text)
+    .split(MATH)
+    .map((part, i) => {
+      if (i % 2 === 0) return part.replace(CITE, (_, nums: string) => citeLinks(nums));
+      const m = part.match(CITES_AT_END);
+      if (!m) return part;
+      const moved = [...m[1].matchAll(CITE)].map((c) => citeLinks(c[1])).join("");
+      const [, , space, close] = m;
+      // A multi-line "$$" block: its closing "$$" must stay alone on its line, so the
+      // citations go on the next line, indented like the fence (keeps a list item whole).
+      if (space.includes("\n")) {
+        const indent = space.slice(space.lastIndexOf("\n") + 1);
+        return part.slice(0, m.index) + space + close + "\n" + indent + moved;
+      }
+      return part.slice(0, m.index) + close + " " + moved;
+    })
+    .join("");
+}
+
+/*
+  "$$...$$" in the MIDDLE of a sentence is treated as inline maths, so a
+  multi-line formula (aligned equations) gets squeezed into the text line.
+  Give such formulas their own lines, indented like the line they were on so
+  a numbered list stays one list. Only multi-line maths (\begin{...} or \\)
+  is moved: "$$5 or $$10" stays as it was. A line that is ONLY "$$...$$" also
+  gets its own fences, so it is drawn centred as a display formula.
+  Lines inside ``` code are skipped.
+*/
+const MULTILINE_MATH_MID_LINE = /(\S[^\n]*?)?\s*\$\$([^$\n]*?(?:\\begin\{|\\\\)[^$\n]*?)\$\$[ \t]*/g;
+const WHOLE_LINE_MATH = /^(\s*)\$\$([^$\n]+?)\$\$\s*$/;
+
+function liftDisplayMath(markdown: string): string {
+  let inFence = false;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (/^\s*```/.test(line)) inFence = !inFence;
+      if (inFence || !line.includes("$$")) return line;
+      const whole = line.match(WHOLE_LINE_MATH);
+      if (whole) return `${whole[1]}$$\n${whole[1]}${whole[2].trim()}\n${whole[1]}$$`;
+      // continuation indent: as wide as "3. " for a list item, else the line's own indent
+      const marker = line.match(/^\s*(?:[-*+]|\d+[.)])\s+/);
+      const indent = marker ? " ".repeat(marker[0].length) : (line.match(/^\s*/)?.[0] ?? "");
+      return line.replace(
+        MULTILINE_MATH_MID_LINE,
+        (_, before: string | undefined, body: string) =>
+          // no text before it (formula starts the line): no empty line in front
+          `${before ? `${before}\n` : ""}${indent}$$\n${indent}${body.trim()}\n${indent}$$\n${indent}`,
+      );
+    })
+    .join("\n");
+}
 
 export function linkCitations(markdown: string): string {
-  return markdown
+  return liftDisplayMath(markdown)
     .split(CODE)
-    .map((part, i) =>
-      i % 2 === 1
-        ? part
-        : part.replace(CITE, (_, nums: string) =>
-            nums
-              .split(",")
-              .map((n) => `[${n.trim()}](#cite-${n.trim()})`)
-              .join(""),
-          ),
-    )
+    .map((part, i) => (i % 2 === 1 ? part : linkOutsideMath(part)))
     .join("");
 }
 
@@ -83,11 +160,13 @@ function CiteOrLink({ href, children }: { href?: string; children?: React.ReactN
         title={where}
         aria-label={`Source ${n}: ${where}`}
         className={cn(
-          "cite-chip mx-0.5 inline-flex h-[1.15rem] min-w-[1.15rem] -translate-y-px items-center justify-center rounded-full px-1 align-middle text-[0.68rem] font-bold tabular-nums transition-colors",
+          // A small square tag, not a round pill. Yellow only when it points at
+          // the passage being shown: yellow always means "from your notes".
+          "cite-chip mx-0.5 inline-flex h-4 min-w-4 -translate-y-px items-center justify-center rounded px-1 align-middle caption-3 tabular-nums transition-colors",
           "outline-none focus-visible:ring-2 focus-visible:ring-ring",
           activeN === n
             ? "bg-highlight text-highlight-foreground"
-            : "bg-primary/12 text-primary hover:bg-highlight hover:text-highlight-foreground",
+            : "bg-muted text-foreground ring-1 ring-border ring-inset hover:bg-highlight hover:text-highlight-foreground",
         )}
       >
         {n}
@@ -105,13 +184,18 @@ const COMPONENTS: Components = {
   a: ({ href, children }) => <CiteOrLink href={href}>{children}</CiteOrLink>,
   // Wide tables scroll sideways inside the answer instead of breaking the page.
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-md border">
+    <div className="my-3 overflow-x-auto rounded-lg border">
       <table>{children}</table>
     </div>
   ),
 };
 const REMARK = [remarkGfm, remarkMath];
-const REHYPE = [rehypeKatex];
+/*
+  If a formula still can't be parsed, KaTeX shows its source instead of
+  failing the whole answer. errorColor makes that fallback quiet grey (see
+  .katex-error in globals.css) instead of alarm red.
+*/
+const REHYPE: [typeof rehypeKatex, { errorColor: string }][] = [[rehypeKatex, { errorColor: "var(--ink-soft)" }]];
 
 export const AnswerMarkdown = memo(function AnswerMarkdown({ text, sources, activeN = null, onCite, className }: Props) {
   const linked = useMemo(() => linkCitations(text), [text]);

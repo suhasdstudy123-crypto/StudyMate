@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 // Fonts come from npm packages (Fontsource), so they're served from our own
 // site: no request to Google on page load, and they work offline.
-import "@fontsource-variable/schibsted-grotesk";
+import "@fontsource-variable/geist";
 import "@fontsource-variable/source-serif-4";
 import "./globals.css";
 

@@ -61,7 +61,7 @@ export function DeleteCourseDialog({ course, onClose, onDeleted }: Props) {
         files > 0 ? (
           <>
             This also deletes{" "}
-            <strong className="font-bold text-foreground">
+            <strong className="font-semibold text-foreground">
               {files} {files === 1 ? "file" : "files"}
             </strong>{" "}
             and everything StudyMate learned from them. Past chats stay, without the course. This can&apos;t be undone.
@@ -71,7 +71,7 @@ export function DeleteCourseDialog({ course, onClose, onDeleted }: Props) {
         )
       }
     >
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         {error && <FormAlert>{error}</FormAlert>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={close} disabled={busy} data-autofocus>

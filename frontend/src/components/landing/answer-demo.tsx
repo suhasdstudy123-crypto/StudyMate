@@ -107,13 +107,13 @@ export function AnswerDemo() {
   return (
     <div
       ref={ref}
-      className="relative min-h-[27rem] rounded-lg border bg-card p-5 shadow-[0_1px_0_var(--rule),0_30px_60px_-30px_rgb(23_31_77/0.45)] sm:min-h-[26rem] sm:p-7"
+      className="relative min-h-[26rem] rounded-xl border bg-card p-4 shadow-sm sm:p-6"
     >
       {/* The question bubble, typed character by character */}
       <div className="flex justify-end">
-        <p className="max-w-[85%] rounded-lg rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground">
+        <p className="max-w-[85%] rounded-lg bg-muted px-3 py-2 body-3">
           {question}
-          {show === "typing" && <span className="caret ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[3px] bg-current" />}
+          {show === "typing" && <span className="caret ml-0.5 inline-block h-[1.1em] w-0.5 translate-y-0.5 bg-current" />}
         </p>
       </div>
 
@@ -121,7 +121,7 @@ export function AnswerDemo() {
         {show === "thinking" && (
           <motion.div
             key="thinking"
-            className="mt-6 flex gap-1.5"
+            className="mt-6 flex gap-1"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -130,9 +130,9 @@ export function AnswerDemo() {
             {[0, 1, 2].map((i) => (
               <motion.span
                 key={i}
-                className="size-2 rounded-full bg-muted-foreground"
-                animate={{ y: [0, -5, 0] }}
-                transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.12 }}
+                className="size-1.5 rounded-full bg-muted-foreground"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1, repeat: Infinity, delay: i * 0.15, ease: [0.22, 1, 0.36, 1] }}
               />
             ))}
           </motion.div>
@@ -144,28 +144,28 @@ export function AnswerDemo() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="mt-6 leading-relaxed">
+            <p className="mt-6 body-3">
               {example.answer}
-              <sup className="ml-1 rounded-sm bg-muted px-1.5 py-0.5 text-xs font-bold text-primary">1</sup>
+              <sup className="ml-1 rounded-sm border px-1 caption-3 text-muted-foreground">1</sup>
             </p>
 
             {reached("source") && (
               <motion.div
-                className="mt-6 overflow-hidden rounded-md border bg-background"
+                className="mt-6 overflow-hidden rounded-lg border bg-background"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5 text-sm">
-                  <span className="inline-flex min-w-0 items-center gap-2 font-semibold">
-                    <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                <div className="flex items-center justify-between gap-3 border-b px-4 py-2 body-6">
+                  <span className="inline-flex min-w-0 items-center gap-2 title-4">
+                    <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="truncate">{example.file}</span>
                   </span>
                   <span className="shrink-0 text-muted-foreground">Page {example.page}</span>
                 </div>
-                <blockquote className="border-l-2 border-destructive/60 px-4 py-4 font-serif text-[1.05rem] leading-[1.75] text-foreground/85">
+                <blockquote className="px-4 py-4 font-serif text-lg leading-7 text-foreground/85">
                   {example.before}
                   <motion.mark
                     className="highlight transition-colors duration-500"
@@ -174,7 +174,7 @@ export function AnswerDemo() {
                     style={{ color: reached("highlight") ? undefined : "inherit" }}
                     initial={{ backgroundSize: "0% 78%" }}
                     animate={{ backgroundSize: reached("highlight") ? "100% 78%" : "0% 78%" }}
-                    transition={{ duration: 0.9, ease: [0.6, 0, 0.2, 1] }}
+                    transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                   >
                     {example.highlighted}
                   </motion.mark>

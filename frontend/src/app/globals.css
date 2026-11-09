@@ -12,37 +12,43 @@
   raw hex values; they say "primary" or "muted", and the theme decides
   what that means in light and dark mode.
 
-  Concept: blue ballpoint ink on cool paper, with highlighter yellow used
-  ONLY to mark text quoted from the student's own notes.
+  Concept: a quiet, neutral workspace. Greys carry the structure, ONE blue
+  marks what you can act on (buttons, links, focus), and highlighter
+  yellow is reserved for one meaning only: text an answer cites from your
+  notes. Fewer colours = each colour means something.
 */
 :root {
-  --paper: #f5f7fc;            /* page background: cool, slightly blue white */
-  --sheet: #ffffff;            /* raised surfaces: cards, inputs */
-  --ink: #171f4d;              /* main text: dark ballpoint navy */
-  --ink-soft: #545c84;         /* secondary text */
-  --ballpoint: #2a45c4;        /* primary actions and links */
+  --paper: #fafafa;            /* page background: neutral off-white */
+  --sheet: #ffffff;            /* raised surfaces: panels, inputs */
+  --ink: #18181b;              /* main text: near black */
+  --ink-soft: #5c5f66;         /* secondary text (4.5:1+ on paper and sheet) */
+  --ballpoint: #2b59c3;        /* primary actions, links, focus ring */
   --ballpoint-ink: #ffffff;    /* text on top of --ballpoint */
-  --rule: #d8deee;             /* borders, like faint notebook lines */
-  --tint: #e9edf9;             /* subtle filled areas */
-  --margin-red: #cf3a3a;       /* errors only (the red margin line) */
+  --rule: #e4e4e7;             /* borders and dividers */
+  --tint: #f1f1f3;             /* subtle filled areas: hover, chips, table heads */
+  --margin-red: #c4362f;       /* errors and destructive actions only */
+  --success: #2f7d4f;          /* "ready" states only */
   --highlighter: #ffe14d;      /* cited text only */
-  --highlighter-ink: #171f4d;  /* text sitting on the highlighter */
-  --screen: #1b2459;           /* Marky's face screen */
+  --highlighter-ink: #18181b;  /* text sitting on the highlighter */
+  --screen: #26272b;           /* Marky's face screen */
 }
 
+/* Dark surfaces use the design system's fixed greys: #181818 page,
+   #1F1F1F panels, #272727 fills, #313131 lines. */
 .dark {
-  --paper: #0d1230;
-  --sheet: #151b42;
-  --ink: #e7eaf8;
-  --ink-soft: #a2a9cd;
-  --ballpoint: #8fa3ff;
-  --ballpoint-ink: #0d1230;
-  --rule: #2a3266;
-  --tint: #1b2250;
-  --margin-red: #ff7b7b;
+  --paper: #181818;
+  --sheet: #1f1f1f;
+  --ink: #ededed;
+  --ink-soft: #a3a3a3;
+  --ballpoint: #8ab0ff;
+  --ballpoint-ink: #131313;
+  --rule: #313131;
+  --tint: #272727;
+  --margin-red: #ff8a80;
+  --success: #7fd19b;
   --highlighter: #ffe14d;
-  --highlighter-ink: #0d1230;
-  --screen: #070a1f;
+  --highlighter-ink: #181818;
+  --screen: #000000;
 }
 
 /*
@@ -64,17 +70,61 @@
   --color-input: var(--rule);
   --color-ring: var(--ballpoint);
   --color-destructive: var(--margin-red);
+  --color-success: var(--success);
   --color-highlight: var(--highlighter);
   --color-highlight-foreground: var(--highlighter-ink);
 
-  /* Sans = the app's own voice. Serif = text from YOUR documents. */
-  --font-sans: "Schibsted Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  /* ONE typeface for the app. The serif is used for a single job:
+     text quoted from YOUR documents, so "your notes" never look like
+     "the app talking". */
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Source Serif 4 Variable", ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 1rem;
+  /*
+    One motion curve for the whole site: starts fast, settles slowly, so
+    things feel like they have weight instead of sliding at constant speed.
+    Every Tailwind `transition` class uses it by default.
+  */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --default-transition-duration: 200ms;
 }
+
+/*
+  TEXT STYLES
+  Every piece of text uses one of these named styles instead of a loose
+  size + weight. Sizes come only from Tailwind's type scale, weights never
+  go above semibold. Headings use a slightly tighter letter spacing.
+  @utility makes each one a real Tailwind class, so it works with
+  variants: sm:heading-3, md:heading-2 ...
+*/
+@utility heading-1 { font-size: 3.75rem; line-height: 1; font-weight: 600; letter-spacing: -0.025em; }
+@utility heading-2 { font-size: 3rem; line-height: 1; font-weight: 600; letter-spacing: -0.025em; }
+@utility heading-3 { font-size: 2.25rem; line-height: 2.5rem; font-weight: 600; letter-spacing: -0.02em; }
+@utility heading-4 { font-size: 1.875rem; line-height: 2.25rem; font-weight: 600; letter-spacing: -0.02em; }
+@utility heading-5 { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.015em; }
+@utility heading-6 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; letter-spacing: -0.01em; }
+@utility title-1 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 500; }
+@utility title-2 { font-size: 1.125rem; line-height: 1.75rem; font-weight: 500; }
+@utility title-3 { font-size: 1rem; line-height: 1.5rem; font-weight: 500; }
+@utility title-4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+@utility title-5 { font-size: 0.75rem; line-height: 1rem; font-weight: 500; }
+@utility body-1 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
+@utility body-2 { font-size: 1rem; line-height: 1.5rem; font-weight: 500; }
+@utility body-3 { font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
+@utility body-4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
+@utility body-5 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+@utility body-6 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+@utility button-lg { font-size: 1.125rem; line-height: 1.75rem; font-weight: 600; }
+@utility button-md { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
+@utility button-sm { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; }
+@utility button-xsm { font-size: 0.75rem; line-height: 1rem; font-weight: 600; }
+@utility caption-1 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+@utility caption-2 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+@utility caption-3 { font-size: 0.75rem; line-height: 1rem; font-weight: 600; }
+@utility caption-4 { font-size: 0.75rem; line-height: 1rem; font-weight: 500; }
+@utility caption-5 { font-size: 0.75rem; line-height: 1rem; font-weight: 400; }
 
 @layer base {
   * {
@@ -82,25 +132,26 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: "ss01", "tnum" 0;
+  }
+  /* Headings and running text never leave one word alone on the last line */
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p, li {
+    text-wrap: pretty;
   }
   ::selection {
-    background: var(--highlighter);
-    color: var(--highlighter-ink);
+    background: color-mix(in oklab, var(--ballpoint) 25%, transparent);
   }
 
   /*
-    Scrollbars in the theme's ink instead of the browser's grey.
-    scrollbar-color is the standard property (Chrome, Edge, Firefox); it is
-    inherited, so setting it on <html> themes the page AND every inner
-    scroll area (dialogs, page lists). The thumb is the soft ink colour,
-    see-through so it never shouts; the track is transparent so the paper
-    shows behind it. Because it uses the tokens, dark mode follows by itself.
+    Scrollbars in the theme's grey instead of the browser's default.
+    scrollbar-color is inherited, so setting it on <html> themes the page
+    AND every inner scroll area (dialogs, page lists).
   */
   html {
-    scrollbar-color: color-mix(in oklab, var(--ink-soft) 45%, transparent) transparent;
+    scrollbar-color: color-mix(in oklab, var(--ink-soft) 40%, transparent) transparent;
   }
-  /* Inner scroll areas get the thin version; the page keeps a normal one */
   body * {
     scrollbar-width: thin;
   }
@@ -116,7 +167,7 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--ink-soft) 45%, transparent);
+    background: color-mix(in oklab, var(--ink-soft) 40%, transparent);
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
@@ -124,10 +175,10 @@
 }
 
 /*
-  The highlighter mark: the one bold visual element of StudyMate.
-  A yellow band behind the text, slightly irregular at the ends like a
-  real marker stroke. box-decoration-break: clone keeps the rounded ends
-  on every line when the highlighted text wraps.
+  The highlighter mark. Used ONLY for text an answer cites, so yellow
+  always means "this came from your notes". A yellow band behind the
+  text, slightly irregular at the ends like a real marker stroke;
+  box-decoration-break: clone keeps the ends on every wrapped line.
 */
 .highlight {
   color: var(--highlighter-ink);
@@ -150,7 +201,7 @@
 
 /* Sweeps in once, left to right, like drawing the stroke. */
 .highlight-sweep {
-  animation: highlight-sweep 900ms cubic-bezier(0.6, 0, 0.2, 1) 600ms both;
+  animation: highlight-sweep 700ms var(--ease-soft) 300ms both;
 }
 
 @keyframes highlight-sweep {
@@ -163,75 +214,21 @@
   }
 }
 
-/* ---------- Landing page motion ---------- */
-
-/* Faint notebook grid behind the hero, fading out towards the edges */
-.grid-paper {
-  background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--rule) 70%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--rule) 70%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, black 30%, transparent 75%);
-}
-
-/* Marky floats; his shadow shrinks as he rises */
-.bot-bob {
-  animation: bot-bob 3.4s ease-in-out infinite;
-}
-.bot-shadow {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: bot-shadow 3.4s ease-in-out infinite;
-}
-.bot-glow {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: bot-glow 2.4s ease-in-out infinite;
-}
+/* Marky's arm swings while waving (only mood that moves on its own) */
 .bot-arm {
   transform-box: view-box;
   transform-origin: 130px 174px; /* the shoulder */
-  transition: transform 300ms ease;
+  transition: transform 300ms var(--ease-soft);
 }
 .bot-arm-wave {
-  animation: bot-wave 1.1s ease-in-out infinite;
+  animation: bot-wave 1.2s var(--ease-soft) 2 alternate;
 }
-
-@keyframes bot-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-@keyframes bot-shadow {
-  0%, 100% { transform: scaleX(1); opacity: 1; }
-  50% { transform: scaleX(0.82); opacity: 0.6; }
-}
-@keyframes bot-glow {
-  0%, 100% { transform: scale(0.8); opacity: 0.5; }
-  50% { transform: scale(1.15); opacity: 1; }
-}
-/* The arm starts pointing down-right; rotating it -95deg..-55deg swings
-   it out to the side and up, clear of the head, like a wave. */
 @keyframes bot-wave {
-  0%, 100% { transform: rotate(-95deg); }
-  50% { transform: rotate(-55deg); }
+  from { transform: rotate(-95deg); }
+  to { transform: rotate(-55deg); }
 }
 
-/* Endless row of file names; the list is rendered twice and slides by half */
-.marquee {
-  animation: marquee var(--marquee-duration, 40s) linear infinite;
-}
-.marquee-reverse {
-  animation-direction: reverse;
-}
-.marquee-track:hover .marquee {
-  animation-play-state: paused;
-}
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-/* Typing caret in the demo */
+/* Typing caret (landing demo, streaming answer) */
 .caret {
   animation: caret 1s steps(1) infinite;
 }
@@ -239,45 +236,38 @@
   50% { opacity: 0; }
 }
 
-/* ---------- App: dialogs and course notebooks ---------- */
+/* ---------- Dialogs ---------- */
 
-/* Dialogs pop in: a small rise + fade, so opening feels responsive. */
+/* Dialogs open with a short rise + fade, on the site's one curve. */
 .dialog-pop[open] {
-  animation: dialog-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: dialog-pop 240ms var(--ease-soft);
 }
 .dialog-pop[open]::backdrop {
-  animation: backdrop-fade 180ms ease-out;
+  animation: backdrop-fade 240ms var(--ease-soft);
 }
 @keyframes dialog-pop {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  from { opacity: 0; transform: translateY(8px); }
 }
 @keyframes backdrop-fade {
   from { opacity: 0; }
 }
 
-/* Faint notebook lines inside a course card, 28px apart, like ruled paper */
-.ruled {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0 27px,
-    color-mix(in oklab, var(--rule) 75%, transparent) 27px 28px
-  );
-}
-
-/* The notebook's spiral binding: a column of small holes down the spine */
-.binding {
-  background-image: radial-gradient(circle at center, var(--paper) 0 3.5px, transparent 4px);
-  background-size: 100% 22px;
-  background-position: center 0;
-}
-
 /* "Queued": a short bar sliding back and forth (no known percentage yet) */
 .progress-indeterminate {
-  animation: progress-slide 1.4s ease-in-out infinite;
+  animation: progress-slide 1.4s var(--ease-soft) infinite;
 }
 @keyframes progress-slide {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
+}
+
+/* Loading placeholders shaped like the real content */
+.skeleton {
+  background: var(--tint);
+  animation: skeleton-pulse 1.6s var(--ease-soft) infinite alternate;
+}
+@keyframes skeleton-pulse {
+  to { opacity: 0.55; }
 }
 
 /* ---------- Chat (Stage 7) ---------- */
@@ -287,73 +277,88 @@
   all default styles, so lists, tables and code need their look back here.
   The answer is the app speaking, so it uses the sans font; passages quoted
   from your notes (sources panel, page viewer) stay in the serif.
+  Sizes follow the type scale: body 16/24 (Body 3), small bits 14/20.
 */
 .answer-prose {
-  font-size: 0.96rem;
-  line-height: 1.7;
+  font-size: 1rem;
+  line-height: 1.5rem;
   overflow-wrap: anywhere;
 }
-.answer-prose > * + * { margin-top: 0.75em; }
+.answer-prose > * + * { margin-top: 0.75rem; }
 .answer-prose h1, .answer-prose h2, .answer-prose h3, .answer-prose h4 {
-  font-weight: 800;
-  line-height: 1.3;
-  margin-top: 1.1em;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
 }
-.answer-prose h1 { font-size: 1.2em; }
-.answer-prose h2 { font-size: 1.1em; }
-.answer-prose h3, .answer-prose h4 { font-size: 1em; }
-.answer-prose ul, .answer-prose ol { padding-left: 1.4em; }
+.answer-prose h1, .answer-prose h2 { font-size: 1.125rem; line-height: 1.75rem; }
+.answer-prose ul, .answer-prose ol { padding-left: 1.5rem; }
 .answer-prose ul { list-style: disc; }
 .answer-prose ol { list-style: decimal; }
-.answer-prose li + li { margin-top: 0.3em; }
-.answer-prose li::marker { color: var(--ballpoint); }
-.answer-prose strong { font-weight: 700; }
+.answer-prose li + li { margin-top: 0.25rem; }
+.answer-prose li::marker { color: var(--ink-soft); }
+.answer-prose strong { font-weight: 600; }
 .answer-prose blockquote {
-  border-left: 3px solid var(--rule);
-  padding-left: 0.9em;
+  border: 1px solid var(--rule);
+  background: var(--tint);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
   color: var(--ink-soft);
 }
 .answer-prose code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.85em;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
   background: var(--tint);
-  border-radius: 0.3em;
-  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
 }
 .answer-prose pre {
   overflow-x: auto;
   background: var(--tint);
-  border-radius: var(--radius-md);
-  padding: 0.75em 0.9em;
-  line-height: 1.45;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  line-height: 1.5rem;
 }
-.answer-prose pre code { background: none; padding: 0; font-size: 0.82rem; }
-.answer-prose table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.answer-prose pre code { background: none; padding: 0; }
+.answer-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
 /* Table cells break only between words; a wide table scrolls sideways instead */
 .answer-prose table { overflow-wrap: normal; }
 .answer-prose th { white-space: nowrap; }
 .answer-prose th, .answer-prose td {
   border-bottom: 1px solid var(--rule);
-  padding: 0.45em 0.75em;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
 }
-.answer-prose th { background: var(--tint); font-weight: 700; }
+.answer-prose th { background: var(--tint); font-weight: 600; }
 .answer-prose tr:last-child td { border-bottom: 0; }
 .answer-prose hr { border-color: var(--rule); }
 /* Display formulas ($$...$$) scroll sideways on a phone instead of overflowing */
-.answer-prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+.answer-prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.25rem 0; }
+/* A formula KaTeX couldn't parse: shown as its source, styled like code, not red */
+.answer-prose .katex-error {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--tint);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  overflow-wrap: anywhere;
+}
 
-/* A blinking ink caret after the last word while the answer is being written */
+/* A blinking caret after the last word while the answer is being written */
 .streaming-answer .answer-prose > :last-child::after {
   content: "";
   display: inline-block;
-  width: 0.5em;
-  height: 1.05em;
+  width: 2px;
+  height: 1.1em;
   margin-left: 0.15em;
-  vertical-align: -0.15em;
-  border-radius: 1px;
-  background: var(--ballpoint);
+  vertical-align: -0.2em;
+  background: var(--ink);
   animation: caret 1s steps(1) infinite;
 }
 
@@ -369,27 +374,27 @@
   75%, 100% { content: "..."; }
 }
 
-/* A citation chip pops in as the answer streams past it */
-.cite-chip { animation: cite-pop 260ms cubic-bezier(0.2, 0.8, 0.2, 1.4); }
-@keyframes cite-pop {
-  from { transform: translateY(-1px) scale(0.4); opacity: 0; }
+/* A citation chip fades in as the answer streams past it */
+.cite-chip { animation: cite-in 300ms var(--ease-soft); }
+@keyframes cite-in {
+  from { opacity: 0; transform: translateY(2px); }
 }
 
-/* Respect "reduce motion": nothing moves on its own */
+/* Respect "reduce motion": nothing moves on its own, only opacity changes stay */
 @media (prefers-reduced-motion: reduce) {
   .highlight-sweep,
-  .bot-bob,
-  .bot-shadow,
-  .bot-glow,
   .bot-arm-wave,
-  .marquee,
   .caret,
   .dialog-pop[open],
   .dialog-pop[open]::backdrop,
   .progress-indeterminate,
+  .skeleton,
   .streaming-answer .answer-prose > :last-child::after,
   .thinking-dots::after,
   .cite-chip {
     animation: none;
+  }
+  .bot-arm {
+    transition: none;
   }
 }

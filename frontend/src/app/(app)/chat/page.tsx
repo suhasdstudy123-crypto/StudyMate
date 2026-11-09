@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { History, Library, Loader2, MessageSquarePlus, Trash2 } from "lucide-react";
+import { ArrowUpRight, History, Library, Loader2, MessageSquarePlus, Trash2 } from "lucide-react";
 
 import { ChatThread, type UiMessage } from "@/components/chat/chat-thread";
 import { Composer } from "@/components/chat/composer";
@@ -47,6 +47,9 @@ import { cn } from "@/lib/utils";
 // The Sources and Chats dialogs can be long: they scroll inside themselves.
 const SCROLLING_DIALOG = "max-w-lg max-h-[calc(100dvh-2rem)] overflow-auto";
 
+// One curve for every movement on the site (same as --ease-soft in globals.css)
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 let tempId = 0;
 const nextTempId = () => `temp-${++tempId}`;
 
@@ -61,8 +64,10 @@ export default function ChatPage() {
 
 function PageLoading() {
   return (
-    <div className="grid h-60 place-items-center text-muted-foreground">
-      <Loader2 className="size-6 animate-spin" aria-label="Loading" />
+    // Placeholders shaped like a question and an answer
+    <div className="grid gap-4 py-2" role="status" aria-label="Loading">
+      <div className="skeleton ml-auto h-10 w-1/2 rounded-lg" />
+      <div className="skeleton h-32 rounded-xl" />
     </div>
   );
 }
@@ -459,12 +464,12 @@ function ChatScreen() {
   );
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)_19rem]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[15rem_minmax(0,1fr)_20rem]">
       {/* ---------- left: course + chats ---------- */}
-      <aside className="grid min-w-0 grid-cols-1 content-start gap-4 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto">
+      <aside className="grid min-w-0 grid-cols-1 content-start gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Ask your notes</h1>
-          <label htmlFor="course-pick" className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h1 className="heading-6">Ask your notes</h1>
+          <label htmlFor="course-pick" className="mt-4 block title-5 text-muted-foreground">
             Course
           </label>
           <select
@@ -472,7 +477,7 @@ function ChatScreen() {
             value={courseId ?? ""}
             onChange={(e) => newChat(e.target.value)}
             disabled={streaming}
-            className="mt-1.5 h-10 w-full rounded-md border bg-card px-3 text-sm font-semibold outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25"
+            className="mt-1 h-10 w-full rounded-lg border bg-card px-2 body-5 outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
           >
             {courseDeleted && <option value="">(deleted course)</option>}
             {courses.map((c) => (
@@ -482,7 +487,7 @@ function ChatScreen() {
             ))}
           </select>
           {course && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="mt-2 caption-5 text-muted-foreground">
               {course.ready_material_count} {course.ready_material_count === 1 ? "file" : "files"} · {course.chunk_count} passages
             </p>
           )}
@@ -515,10 +520,10 @@ function ChatScreen() {
               {/* This chat: its title, and a visible way to delete it */}
               <div className="mb-6 flex items-center gap-3 border-b pb-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold" title={chatTitle}>
+                  <p className="truncate title-3" title={chatTitle}>
                     {chatTitle}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="caption-5 text-muted-foreground">
                     {course?.name ?? "Deleted course"} · {questionCount} {questionCount === 1 ? "question" : "questions"}
                   </p>
                 </div>
@@ -546,7 +551,7 @@ function ChatScreen() {
           <div ref={bottomRef} className="h-4 scroll-mb-36" />
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-2 mt-4 bg-gradient-to-t from-background from-70% to-transparent px-2 pb-4 pt-6">
+        <div className="sticky bottom-0 z-10 -mx-2 mt-4 bg-background px-2 pb-4 pt-2">
           <Composer
             onSend={(q) => void send(q)}
             onStop={() => abortRef.current?.abort()}
@@ -561,12 +566,12 @@ function ChatScreen() {
       </section>
 
       {/* ---------- right: sources (wide screens) ---------- */}
-      <aside className="hidden xl:sticky xl:top-24 xl:block xl:max-h-[calc(100dvh-8rem)] xl:self-start xl:overflow-y-auto" aria-label="Sources">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
-          <Library className="size-4 text-primary" aria-hidden="true" />
+      <aside className="hidden xl:sticky xl:top-20 xl:block xl:max-h-[calc(100dvh-7rem)] xl:self-start xl:overflow-y-auto" aria-label="Sources">
+        <h2 className="mb-3 flex items-center gap-2 title-4">
+          <Library className="size-4 text-muted-foreground" aria-hidden="true" />
           Sources
           {selectedSources.length > 0 && (
-            <span className="font-normal text-muted-foreground">
+            <span className="caption-2 text-muted-foreground">
               · {citedSet.size} cited of {selectedSources.length}
             </span>
           )}
@@ -582,9 +587,9 @@ function ChatScreen() {
                 onOpen={openSource}
               />
             ) : (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed p-4 body-6 text-muted-foreground">
                 The passages behind each answer show up here. Click a number like{" "}
-                <span className="mx-0.5 inline-grid size-4 place-items-center rounded-full bg-primary/12 text-[0.65rem] font-bold text-primary">
+                <span className="mx-0.5 inline-grid h-4 min-w-4 place-items-center rounded border bg-card px-1 caption-4 text-foreground">
                   1
                 </span>{" "}
                 in an answer to see where it came from.
@@ -604,8 +609,8 @@ function ChatScreen() {
       </Dialog>
 
       <Dialog open={toDelete !== null} onClose={() => setToDelete(null)} busy={deleting} title="Delete this chat?" description={toDelete?.title ?? "Untitled chat"} className="max-w-md">
-        <p className="text-sm text-muted-foreground">The questions and answers are deleted. Your notes are not touched.</p>
-        <div className="mt-5 flex justify-end gap-2">
+        <p className="body-6 text-muted-foreground">The questions and answers are deleted. Your notes are not touched.</p>
+        <div className="mt-6 flex justify-end gap-2">
           <Button variant="outline" onClick={() => setToDelete(null)} disabled={deleting} data-autofocus>
             Keep it
           </Button>
@@ -646,7 +651,7 @@ function ChatList({
         <MessageSquarePlus aria-hidden="true" /> New chat
       </Button>
       {sessions.length === 0 ? (
-        <p className="px-1 py-2 text-sm text-muted-foreground">No chats in this course yet.</p>
+        <p className="px-1 py-2 body-6 text-muted-foreground">No chats in this course yet.</p>
       ) : (
         <ul className="grid gap-0.5">
           {sessions.map((s) => (
@@ -656,15 +661,12 @@ function ChatList({
                 onClick={() => onOpen(s)}
                 aria-current={s.id === activeId ? "page" : undefined}
                 className={cn(
-                  "w-full rounded-md py-2 pl-3 pr-9 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                  "w-full rounded-lg py-2 pl-3 pr-10 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                   s.id === activeId ? "bg-muted" : "hover:bg-muted/60",
                 )}
               >
-                <span className="flex items-center gap-1.5">
-                  {s.id === activeId && <span aria-hidden="true" className="h-3.5 w-1 shrink-0 rounded-full bg-highlight" />}
-                  <span className="truncate text-sm font-semibold">{s.title ?? "New chat"}</span>
-                </span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block truncate title-4">{s.title ?? "New chat"}</span>
+                <span className="block caption-5 text-muted-foreground">
                   {timeAgo(s.updated_at)} · {Math.floor(s.message_count / 2)} {s.message_count === 2 ? "question" : "questions"}
                 </span>
               </button>
@@ -672,7 +674,7 @@ function ChatList({
                 type="button"
                 onClick={() => onDelete(s)}
                 aria-label={`Delete chat: ${s.title ?? "New chat"}`}
-                className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-60 outline-none transition-[opacity,color] hover:bg-background hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-60 outline-none transition-[opacity,color,background-color] hover:bg-background hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
               </button>
@@ -706,21 +708,17 @@ function Welcome({
     );
   }
   return (
-    <div className="mx-auto flex max-w-xl flex-col items-center py-10 text-center">
-      <Mascot mood="wave" className="w-28" />
-      <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-balance">
-        Ask anything about <span className="highlight">{course?.name ?? "your notes"}</span>
-      </h2>
-      <p className="mt-3 text-pretty text-muted-foreground">
+    <div className="mx-auto flex max-w-xl flex-col items-center py-12 text-center">
+      <Mascot mood="wave" className="w-12" />
+      <h2 className="mt-4 heading-6">Ask anything about {course?.name ?? "your notes"}</h2>
+      <p className="mt-2 body-6 text-muted-foreground">
         StudyMate answers only from your own notes and cites the page for every claim. If the answer isn&apos;t in
         your notes, it says so.
       </p>
       {/* Specific questions about topics in YOUR notes: what RAG answers well */}
-      <div className="mt-6 flex min-h-9 flex-wrap justify-center gap-2" aria-busy={suggestions === null}>
-        {suggestions === null &&
-          [9, 12, 10].map((w, i) => (
-            <span key={i} className="h-9 animate-pulse rounded-full bg-muted" style={{ width: `${w}rem` }} />
-          ))}
+      {/* Suggestions as a short list of rows: easy to scan, and each one is a full-width target */}
+      <div className="mt-6 grid w-full gap-2 sm:grid-cols-2" aria-busy={suggestions === null}>
+        {suggestions === null && [0, 1, 2, 3].map((i) => <span key={i} className="skeleton h-12 rounded-lg" />)}
         {suggestions?.map((s, i) => (
           <motion.button
             key={s}
@@ -728,10 +726,14 @@ function Welcome({
             onClick={() => onPick(s)}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 + i * 0.07 }}
-            className="rounded-full border bg-card px-3.5 py-1.5 text-sm font-semibold outline-none transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+            transition={{ duration: 0.5, delay: 0.1 + i * 0.06, ease: EASE }}
+            className="group flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-3 text-left body-5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             {s}
+            <ArrowUpRight
+              className="size-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
           </motion.button>
         ))}
       </div>
@@ -751,10 +753,10 @@ function EmptyState({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center py-14 text-center">
-      <Mascot mood={mood} className="w-28" />
-      <h2 className="mt-5 text-2xl font-extrabold tracking-tight text-balance">{title}</h2>
-      <p className="mt-3 text-pretty text-muted-foreground">{body}</p>
+    <div className="mx-auto flex max-w-md flex-col items-center py-12 text-center">
+      <Mascot mood={mood} className="w-12" />
+      <h2 className="mt-4 heading-6">{title}</h2>
+      <p className="mt-2 body-6 text-muted-foreground">{body}</p>
       {children && <div className="mt-6">{children}</div>}
     </div>
   );

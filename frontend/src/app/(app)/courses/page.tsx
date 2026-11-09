@@ -96,16 +96,20 @@ export default function CoursesPage() {
   return (
     <div className="grid gap-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <h1 className="text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">Your courses</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h1 className="heading-5 sm:heading-4">Your courses</h1>
+          <p className="mt-1 body-3 text-muted-foreground">
             {load.state === "ready" && total > 0
               ? `${total} ${total === 1 ? "course" : "courses"} · ${files} ${files === 1 ? "file" : "files"}`
-              : "One notebook per subject. Answers only come from the notes inside."}
+              : "One course per subject. Answers only come from the notes inside."}
           </p>
         </motion.div>
         {load.state === "ready" && total > 0 && (
-          <Button size="lg" onClick={() => setForm({})}>
+          <Button onClick={() => setForm({})}>
             <Plus aria-hidden="true" />
             New course
           </Button>
@@ -120,11 +124,11 @@ export default function CoursesPage() {
       {load.state === "loading" && <Skeletons />}
 
       {load.state === "error" && (
-        <div className="flex flex-col items-center rounded-lg border bg-card px-6 py-12 text-center" role="alert">
-          <Mascot mood="confused" className="w-24" />
-          <h2 className="mt-5 text-xl font-bold">Couldn&apos;t open your courses</h2>
-          <p className="mt-1 max-w-sm text-muted-foreground">{load.message}</p>
-          <Button variant="outline" className="mt-5" onClick={retry}>
+        <div className="flex flex-col items-center rounded-xl border bg-card px-6 py-12 text-center" role="alert">
+          <Mascot mood="confused" className="w-14" />
+          <h2 className="mt-4 heading-6">Couldn&apos;t open your courses</h2>
+          <p className="mt-1 max-w-sm body-6 text-muted-foreground">{load.message}</p>
+          <Button variant="outline" className="mt-6" onClick={retry}>
             <RotateCw aria-hidden="true" />
             Try again
           </Button>
@@ -134,7 +138,7 @@ export default function CoursesPage() {
       {load.state === "ready" && total === 0 && <EmptyState onPick={(name) => setForm({ suggestedName: name })} />}
 
       {load.state === "ready" && total > 0 && (
-        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Courses">
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Courses">
           <AnimatePresence mode="popLayout" initial={false}>
             {courses.map((course, i) => (
               <CourseCard
@@ -165,30 +169,29 @@ export default function CoursesPage() {
 function EmptyState({ onPick }: { onPick: (name?: string) => void }) {
   return (
     <motion.section
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="ruled relative overflow-hidden rounded-lg border bg-card px-6 py-12 text-center sm:py-16"
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-xl border bg-card px-6 py-12 text-center sm:py-16"
     >
-      <div aria-hidden="true" className="absolute inset-y-0 left-10 w-px bg-destructive/30 sm:left-16" />
-      <Mascot mood="wave" className="mx-auto w-28" />
-      <h2 className="mt-5 text-2xl font-extrabold tracking-tight sm:text-3xl">Start your first notebook</h2>
-      <p className="mx-auto mt-2 max-w-md text-muted-foreground">
+      <Mascot mood="wave" className="mx-auto w-16" />
+      <h2 className="mt-4 heading-6">Start your first course</h2>
+      <p className="mx-auto mt-1 max-w-md body-6 text-muted-foreground">
         Make a course for each subject. Then upload its notes and ask questions about them.
       </p>
-      <Button size="lg" className="mt-6" onClick={() => onPick()}>
+      <Button className="mt-6" onClick={() => onPick()}>
         <Plus aria-hidden="true" />
         New course
       </Button>
       <div className="mt-6">
-        <p className="text-sm font-semibold text-muted-foreground">Or start with one of these</p>
+        <p className="caption-2 text-muted-foreground">Or start with one of these</p>
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {SUGGESTIONS.map((name) => (
             <button
               key={name}
               type="button"
               onClick={() => onPick(name)}
-              className="rounded-full border bg-background px-3.5 py-1.5 text-sm font-semibold transition-colors outline-none hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-lg border bg-background px-3 py-2 body-5 transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
               + {name}
             </button>
@@ -201,15 +204,14 @@ function EmptyState({ onPick }: { onPick: (name?: string) => void }) {
 
 function Skeletons() {
   return (
-    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading courses" aria-busy="true">
+    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading courses" aria-busy="true">
       {[0, 1, 2].map((i) => (
-        <li key={i} className="flex h-52 overflow-hidden rounded-lg border bg-card">
-          <div className="w-7 bg-muted" />
-          <div className="flex flex-1 animate-pulse flex-col gap-3 p-5">
-            <div className="h-4 w-16 rounded bg-muted" />
-            <div className="h-6 w-3/4 rounded bg-muted" />
-            <div className="h-4 w-full rounded bg-muted" />
-            <div className="mt-auto h-4 w-1/3 rounded bg-muted" />
+        <li key={i} className="flex h-44 overflow-hidden rounded-xl border bg-card">
+          <div className="flex flex-1 flex-col gap-3 p-4">
+            <div className="skeleton h-4 w-16 rounded" />
+            <div className="skeleton h-6 w-3/4 rounded" />
+            <div className="skeleton h-4 w-full rounded" />
+            <div className="skeleton mt-auto h-4 w-1/3 rounded" />
           </div>
         </li>
       ))}

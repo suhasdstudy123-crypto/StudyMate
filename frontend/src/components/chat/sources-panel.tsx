@@ -32,14 +32,14 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
   }, [activeN]);
 
   if (sources.length === 0) {
-    return <p className="px-1 text-sm text-muted-foreground">No passages were found for this question.</p>;
+    return <p className="px-1 body-6 text-muted-foreground">No passages were found for this question.</p>;
   }
 
   // Cited first (in number order), then the rest: what the answer stands on comes first.
   const ordered = [...sources].sort((a, b) => Number(cited.has(b.n)) - Number(cited.has(a.n)) || a.n - b.n);
 
   return (
-    <ol className="grid grid-cols-1 gap-2.5">
+    <ol className="grid grid-cols-1 gap-2">
       {ordered.map((s, i) => {
         const isCited = cited.has(s.n);
         const active = activeN === s.n;
@@ -49,7 +49,7 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
             layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.03 }}
+            transition={{ duration: 0.4, delay: Math.min(i, 8) * 0.03, ease: [0.22, 1, 0.36, 1] }}
             ref={(el: HTMLElement | null) => {
               if (el) refs.current.set(s.n, el);
               else refs.current.delete(s.n);
@@ -58,15 +58,15 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
             <article
               onClick={() => onSelect(s.n)}
               className={cn(
-                "group cursor-pointer rounded-md border bg-card p-3 transition-[border-color,box-shadow,opacity]",
-                active ? "border-primary ring-2 ring-primary/25" : "hover:border-primary/50",
+                "group cursor-pointer rounded-lg border bg-card p-3 transition-[border-color,box-shadow,opacity] duration-300",
+                active ? "border-foreground/40 shadow-sm" : "hover:border-foreground/25",
                 !isCited && !active && "opacity-70 hover:opacity-100",
               )}
             >
               <header className="flex items-start gap-2">
                 <span
                   className={cn(
-                    "grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums",
+                    "grid h-5 min-w-5 shrink-0 place-items-center rounded px-1 caption-3 tabular-nums",
                     isCited ? "bg-highlight text-highlight-foreground" : "bg-muted text-muted-foreground",
                   )}
                   aria-label={`Source ${s.n}`}
@@ -74,13 +74,13 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
                   {s.n}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold">
+                  <p className="flex items-center gap-1 caption-4">
                     <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="truncate" title={s.material_title}>
                       {s.material_title}
                     </span>
                   </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.7rem] text-muted-foreground">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 caption-5 text-muted-foreground">
                     <span className="tabular-nums">page {s.page_number}</span>
                     {s.chunk_type === "table" && (
                       <span className="inline-flex items-center gap-0.5">
@@ -93,17 +93,17 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
                       </span>
                     )}
                     {s.source === "vision" && (
-                      <span className="inline-flex items-center gap-0.5 text-primary" title="Read from a picture by the image reader: check it on the page">
+                      <span className="inline-flex items-center gap-0.5 text-foreground" title="Read from a picture by the image reader: check it on the page">
                         <ScanEye className="size-3" aria-hidden="true" /> from an image
                       </span>
                     )}
-                    <span className={cn("font-semibold", isCited ? "text-foreground" : "")}>
+                    <span className={cn(isCited && "caption-4 text-foreground")}>
                       {isCited ? "cited" : "shown, not cited"}
                     </span>
                   </p>
                 </div>
               </header>
-              <p className={cn("mt-2 font-serif text-[0.85rem] leading-snug", active ? "" : "line-clamp-3")}>
+              <p className={cn("mt-2 font-serif text-sm leading-5", active ? "" : "line-clamp-3")}>
                 {s.content}
               </p>
               <button
@@ -112,10 +112,10 @@ export function SourcesPanel({ sources, cited, activeN, onSelect, onOpen }: Prop
                   e.stopPropagation();
                   onOpen(s);
                 }}
-                className="mt-2 inline-flex items-center gap-1 rounded-sm text-xs font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-2 inline-flex items-center gap-1 rounded-sm caption-3 text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Open page {s.page_number}
-                <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                <ArrowRight className="size-3.5 transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden="true" />
               </button>
             </article>
           </motion.li>

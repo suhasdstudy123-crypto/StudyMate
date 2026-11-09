@@ -44,20 +44,19 @@ export function AppHeader() {
         href={item.href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "relative rounded-md px-3 py-2 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          "rounded-lg px-3 py-2 title-4 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          // the current page: filled and darker, so "where am I" is obvious without decoration
+          active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
       >
         {item.label}
-        {/* the active page gets a highlighter stroke underneath */}
-        {active && <span aria-hidden="true" className="absolute inset-x-3 -bottom-0.5 h-1 rounded-full bg-highlight" />}
       </Link>
     );
   });
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-5 py-3 sm:px-8">
+    <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-md">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-4 px-4 sm:px-8">
         <Logo />
         <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Main">
           {navLinks}
@@ -65,19 +64,18 @@ export function AppHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
-          <div className="flex items-center gap-2.5 rounded-full border bg-card py-1 pl-1 pr-3">
+          <div className="flex items-center gap-2 px-1">
             <span
-              className="grid size-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+              className="grid size-8 place-items-center rounded-full bg-muted caption-3 text-foreground"
               aria-hidden="true"
             >
               {initials}
             </span>
-            <span className="hidden max-w-[10rem] truncate text-sm font-semibold sm:inline">{user?.name}</span>
-            {user?.role === "admin" && (
-              <span className="rounded-full bg-highlight px-2 py-0.5 text-xs font-bold text-highlight-foreground">
-                Admin
-              </span>
-            )}
+            <span className="hidden flex-col sm:flex">
+              <span className="max-w-40 truncate title-4">{user?.name}</span>
+              {user?.role === "admin" && <span className="caption-5 text-muted-foreground">Admin</span>}
+            </span>
+            {user?.role === "admin" && <span className="caption-5 text-muted-foreground sm:hidden">Admin</span>}
           </div>
           <Button variant="ghost" size="sm" onClick={onLogout} disabled={leaving} aria-label="Log out">
             <LogOut aria-hidden="true" />
@@ -87,7 +85,7 @@ export function AppHeader() {
       </div>
 
       {/* phones: the nav links move to their own row */}
-      <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Main">
+      <nav className="flex gap-1 overflow-x-auto px-4 pb-2 md:hidden" aria-label="Main">
         {navLinks}
       </nav>
     </header>

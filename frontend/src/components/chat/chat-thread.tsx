@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, Check, Copy, Library, PenLine, RotateCw, Search, SearchX, Square } from "lucide-react";
+import { AlertTriangle, Check, Copy, Library, RotateCw, Search, SearchX, Square } from "lucide-react";
 
 import { AnswerMarkdown } from "@/components/chat/answer-markdown";
-import { Mascot } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { modelLabel, type ChatMessage, type ErrorEvent } from "@/lib/chat";
 import { cn } from "@/lib/utils";
@@ -51,7 +50,9 @@ export function ChatThread({ messages, selectedId, activeN, onCite, onSelect, on
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            // Keep this short: when a streamed answer gets its saved id, the old copy
+            // fades out while the new one fades in; a long fade leaves both on screen.
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           >
             {m.role === "user" ? (
               <Question message={m} />
@@ -75,16 +76,16 @@ export function ChatThread({ messages, selectedId, activeN, onCite, onSelect, on
 
 function Question({ message }: { message: UiMessage }) {
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-[0.95rem] leading-relaxed text-primary-foreground shadow-sm">
+    <div className="flex flex-col items-end gap-2">
+      <p className="max-w-[85%] whitespace-pre-wrap rounded-xl bg-muted px-4 py-2 body-3">
         {message.content}
       </p>
       {message.search_query && (
         // Follow-ups are rewritten before searching: show what was searched, honestly.
-        <p className="flex max-w-[85%] items-center gap-1.5 text-xs text-muted-foreground">
-          <Search className="size-3 shrink-0" aria-hidden="true" />
+        <p className="flex max-w-[85%] items-center gap-1 caption-5 text-muted-foreground">
+          <Search className="size-3.5 shrink-0" aria-hidden="true" />
           <span>
-            Searched your notes for <span className="font-semibold text-foreground">“{message.search_query}”</span>
+            Searched your notes for <span className="caption-4 text-foreground">“{message.search_query}”</span>
           </span>
         </p>
       )}
@@ -120,11 +121,11 @@ function Answer({
       ? new Date(e.available_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
       : null;
     return (
-      <div role="alert" className="flex gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+      <div role="alert" className="flex gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
         <div className="grid gap-2">
-          <p className="font-semibold">{e.message}</p>
-          {when && <p className="text-sm text-muted-foreground">Answers work again at {when}.</p>}
+          <p className="body-2">{e.message}</p>
+          {when && <p className="body-6 text-muted-foreground">Answers work again at {when}.</p>}
           {e.reason !== "setup" && (
             <Button variant="outline" size="sm" className="w-fit" onClick={() => onRetry(e.question, message.id)}>
               <RotateCw aria-hidden="true" /> Try again
@@ -146,28 +147,19 @@ function Answer({
   }
 
   return (
-    <div className="flex gap-3">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full border bg-card text-primary transition-colors",
-          streaming && "border-primary/60",
-        )}
-      >
-        <PenLine className={cn("size-4", streaming && "animate-pulse")} />
-      </span>
-
+    <div className="flex">
       <div
         onClick={onSelect}
         className={cn(
-          "min-w-0 flex-1 rounded-lg border bg-card px-4 py-3 shadow-[0_1px_0_var(--rule)] transition-[border-color,box-shadow]",
-          selected && !streaming && "border-primary/50 xl:ring-2 xl:ring-primary/10",
+          "min-w-0 flex-1 rounded-xl border bg-card p-4 transition-[border-color,box-shadow] duration-300",
+          // the answer whose sources are showing on the right gets a darker edge
+          selected && !streaming && "xl:border-foreground/30 xl:shadow-sm",
           notInNotes && "border-dashed",
         )}
       >
         {notInNotes && (
-          <p className="mb-2 flex items-center gap-2 text-sm font-bold">
-            <SearchX className="size-4 text-primary" aria-hidden="true" />
+          <p className="mb-2 flex items-center gap-2 title-4">
+            <SearchX className="size-4 text-muted-foreground" aria-hidden="true" />
             Not in your notes
           </p>
         )}
@@ -182,13 +174,13 @@ function Answer({
         )}
 
         {message.status === "stopped" && (
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+          <p className="mt-2 inline-flex items-center gap-1 caption-4 text-muted-foreground">
             <Square className="size-3" aria-hidden="true" /> Stopped: this answer is incomplete
           </p>
         )}
 
         {!streaming && (
-          <footer className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t pt-2.5 text-xs text-muted-foreground">
+          <footer className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 caption-5 text-muted-foreground">
             {message.sources.length > 0 && (
               <button
                 type="button"
@@ -197,7 +189,7 @@ function Answer({
                   onSelect();
                   onShowSources();
                 }}
-                className="inline-flex items-center gap-1 rounded-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring xl:pointer-events-none xl:text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded-sm caption-4 text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring xl:pointer-events-none xl:text-foreground"
               >
                 <Library className="size-3.5" aria-hidden="true" />
                 {citedCount > 0
@@ -212,7 +204,7 @@ function Answer({
                 e.stopPropagation();
                 void copy();
               }}
-              className="ml-auto inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto inline-flex items-center gap-1 rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Copy answer"
             >
               {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
@@ -233,16 +225,17 @@ function Thinking({ phase, passages }: { phase: Phase; passages: number }) {
         ? `Reading ${passages} ${passages === 1 ? "passage" : "passages"}`
         : "Checking your notes";
   return (
-    <div className="flex items-center gap-3 py-1" role="status">
-      <Mascot mood={phase === "searching" ? "peek" : "idle"} gaze={[0.6, 0.4]} className="w-10 shrink-0" />
+    <div className="flex items-center gap-3" role="status">
+      {/* a small dot that breathes while StudyMate works */}
+      <span aria-hidden="true" className="skeleton size-2 shrink-0 rounded-full bg-muted-foreground!" />
       <AnimatePresence mode="wait">
         <motion.p
           key={label}
-          initial={{ opacity: 0, x: -6 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 6 }}
-          transition={{ duration: 0.2 }}
-          className="font-semibold text-muted-foreground"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          className="body-5 text-muted-foreground"
         >
           {label}
           <span className="thinking-dots" aria-hidden="true" />

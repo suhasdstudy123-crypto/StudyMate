@@ -58,7 +58,7 @@ export function PasswordField({
           type={visible ? "text" : "password"}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className="pr-11"
+          className="pr-10"
           {...inputProps}
         />
         <button
@@ -66,7 +66,7 @@ export function PasswordField({
           onClick={toggle}
           // onMouseDown preventDefault: keep focus in the input while clicking
           onMouseDown={(e) => e.preventDefault()}
-          className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-lg text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
         >
@@ -82,14 +82,14 @@ export function PasswordField({
 function FieldMessage({ id, error, hint }: { id: string; error?: string; hint?: string }) {
   if (error) {
     return (
-      <p id={`${id}-error`} className="text-sm font-medium text-destructive">
+      <p id={`${id}-error`} className="caption-1 text-destructive">
         {error}
       </p>
     );
   }
   if (hint) {
     return (
-      <p id={`${id}-hint`} className="text-sm text-muted-foreground">
+      <p id={`${id}-hint`} className="caption-2 text-muted-foreground">
         {hint}
       </p>
     );

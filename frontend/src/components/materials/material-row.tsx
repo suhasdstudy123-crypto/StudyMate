@@ -20,6 +20,8 @@ import { timeAgo } from "@/lib/courses";
 import { fileUrl, formatBytes, isWorking, type Material, type ReaderStatus } from "@/lib/materials";
 import { cn } from "@/lib/utils";
 
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 /*
   One file in a course, in whichever state it's in:
 
@@ -51,17 +53,18 @@ export function UploadRow({ item, onDismiss }: { item: UploadItem; onDismiss: ()
       layout
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, height: 0 }}
-      className={cn("rounded-lg border bg-card p-4", item.error && "border-destructive/40")}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.5, ease: EASE }}
+      className={cn("p-4", item.error && "bg-destructive/5")}
     >
       <div className="flex items-center gap-3">
         <FileIcon tone={item.error ? "error" : "working"} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-bold">{item.name}</p>
+          <p className="truncate title-3">{item.name}</p>
           {item.error ? (
-            <p className="mt-0.5 text-sm font-medium text-destructive">{item.error}</p>
+            <p className="body-5 text-destructive">{item.error}</p>
           ) : (
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="caption-2 text-muted-foreground">
               Uploading {pct}% · {formatBytes(item.size)}
             </p>
           )}
@@ -99,8 +102,9 @@ export function MaterialRow({ material: m, reader, onView, onRename, onRetry, on
       layout
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
-      className={cn("group rounded-lg border bg-card p-4 transition-colors", m.status === "failed" && "border-destructive/40")}
+      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      transition={{ duration: 0.5, ease: EASE }}
+      className={cn("group p-4 transition-colors hover:bg-muted/50", m.status === "failed" && "bg-destructive/5 hover:bg-destructive/5")}
     >
       {/* flex-wrap: on phones the actions wrap onto their own line under the
           details (all 4 are always visible there, there's no hover) */}
@@ -108,15 +112,15 @@ export function MaterialRow({ material: m, reader, onView, onRename, onRetry, on
         <FileIcon tone={m.status === "failed" ? "error" : working ? "working" : "ready"} />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h3 className="min-w-0 truncate font-bold" title={m.original_filename}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 className="min-w-0 truncate title-3" title={m.original_filename}>
               {m.title}
             </h3>
             <StatusChip material={m} />
           </div>
 
           {/* Second line: what we know about the file */}
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 caption-2 text-muted-foreground">
             {m.status === "ready" ? (
               <>
                 {pages} {pages === 1 ? "page" : "pages"} · {m.chunk_count} {m.chunk_count === 1 ? "passage" : "passages"}
@@ -125,7 +129,7 @@ export function MaterialRow({ material: m, reader, onView, onRename, onRetry, on
                 {timeAgo(m.created_at)}
               </>
             ) : m.status === "failed" ? (
-              <span className="font-medium text-destructive">{m.error_message}</span>
+              <span className="text-destructive">{m.error_message}</span>
             ) : m.status === "processing" ? (
               <>
                 Reading page {Math.min(m.pages_processed + 1, pages)} of {pages}
@@ -139,7 +143,7 @@ export function MaterialRow({ material: m, reader, onView, onRename, onRetry, on
         </div>
 
         {/* Actions: always visible on touch, on hover/focus with a mouse */}
-        <div className="-mb-1 flex w-full shrink-0 items-center gap-0.5 pl-[2.75rem] sm:-mt-1 sm:-mr-1 sm:mb-0 sm:w-auto sm:pl-0">
+        <div className="-mb-1 flex w-full shrink-0 items-center gap-1 pl-12 sm:-mt-1 sm:-mr-1 sm:mb-0 sm:w-auto sm:pl-0">
           {m.status === "ready" && (
             <IconAction label={`See what StudyMate read in ${m.title}`} onClick={() => onView(m)} emphasis>
               <BookOpenText />
@@ -150,14 +154,14 @@ export function MaterialRow({ material: m, reader, onView, onRename, onRetry, on
               <RotateCw />
             </IconAction>
           )}
-          <div className="flex items-center gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
+          <div className="flex items-center gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
             <a
               href={fileUrl(m.id)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open ${m.title} (PDF, new tab)`}
               title="Open PDF"
-              className="grid size-9 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4"
+              className="grid size-8 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4"
             >
               <ExternalLink />
             </a>
@@ -202,18 +206,18 @@ function PictureReading({
 }) {
   const total = m.vision_waiting_count + m.vision_done_count + m.vision_failed_count;
   if (total === 0) return null;
-  const note = "mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2.5 py-1.5 text-xs font-medium";
+  const note = "mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 caption-4";
 
   if (m.vision_waiting_count > 0) {
     const stopped = reader && reader.status !== "ok";
     return (
-      <div className="mt-2 grid max-w-md gap-1.5">
+      <div className="mt-2 grid max-w-md gap-2">
         {/* flex-nowrap + items-start: a long message wraps NEXT TO its icon, not under it */}
-        <p className={cn(note, "mt-0 flex-nowrap items-start bg-muted", stopped ? "text-foreground" : "text-muted-foreground")}>
+        <p className={cn(note, "mt-0 flex-nowrap items-start", stopped ? "text-foreground" : "text-muted-foreground")}>
           {stopped ? (
-            <PauseCircle className="mt-px size-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <PauseCircle className="size-3.5 shrink-0" aria-hidden="true" />
           ) : (
-            <Loader2 className="mt-px size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
+            <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
           )}
           {stopped ? (
             <span className="min-w-0">
@@ -241,14 +245,14 @@ function PictureReading({
 
   if (m.vision_failed_count > 0) {
     return (
-      <p className={cn(note, "bg-destructive/8 text-foreground")}>
+      <p className={cn(note, "text-foreground")}>
         <AlertTriangle className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
         {m.vision_failed_count} {m.vision_failed_count === 1 ? "page" : "pages"} couldn&apos;t be read from{" "}
         {m.vision_failed_count === 1 ? "its picture" : "their pictures"}.
         <button
           type="button"
           onClick={onRetryPages}
-          className="ml-1 inline-flex items-center gap-1 rounded-sm font-bold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          className="ml-1 inline-flex items-center gap-1 rounded-sm caption-3 text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RotateCw className="size-3" aria-hidden="true" /> Try again
         </button>
@@ -257,7 +261,7 @@ function PictureReading({
   }
 
   return (
-    <p className={cn(note, "w-fit bg-primary/8 text-primary")}>
+    <p className={cn(note, "w-fit text-muted-foreground")}>
       <ScanEye className="size-3.5 shrink-0" aria-hidden="true" />
       {m.vision_done_count} {m.vision_done_count === 1 ? "page" : "pages"} read from pictures
     </p>
@@ -273,30 +277,32 @@ function formatTime(iso: string | null): string {
 // ---------- small pieces ----------
 
 function StatusChip({ material: m }: { material: Material }) {
-  const base = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold";
+  // Plain coloured text with a small icon, not a filled pill: the colour carries the state,
+  // and the word is always there too (colour alone is never the only signal).
+  const base = "inline-flex items-center gap-1 caption-4";
   switch (m.status) {
     case "ready":
       return (
-        <span className={cn(base, "bg-primary/10 text-primary")}>
-          <Check className="size-3" aria-hidden="true" /> Ready
+        <span className={cn(base, "text-success")}>
+          <Check className="size-3.5" aria-hidden="true" /> Ready
         </span>
       );
     case "processing":
       return (
-        <span className={cn(base, "bg-muted text-foreground")}>
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Reading
+        <span className={cn(base, "text-foreground")}>
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Reading
         </span>
       );
     case "pending":
       return (
-        <span className={cn(base, "bg-muted text-muted-foreground")}>
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Queued
+        <span className={cn(base, "text-muted-foreground")}>
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Queued
         </span>
       );
     default:
       return (
-        <span className={cn(base, "bg-destructive/10 text-destructive")}>
-          <AlertTriangle className="size-3" aria-hidden="true" /> Failed
+        <span className={cn(base, "text-destructive")}>
+          <AlertTriangle className="size-3.5" aria-hidden="true" /> Failed
         </span>
       );
   }
@@ -307,13 +313,13 @@ function FileIcon({ tone }: { tone: "ready" | "working" | "error" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "grid size-10 shrink-0 place-items-center rounded-md",
-        tone === "ready" && "bg-primary text-primary-foreground",
-        tone === "working" && "bg-muted text-primary",
+        "grid size-9 shrink-0 place-items-center rounded-lg",
+        tone === "ready" && "bg-muted text-foreground",
+        tone === "working" && "bg-muted text-muted-foreground",
         tone === "error" && "bg-destructive/10 text-destructive",
       )}
     >
-      <FileText className="size-5" />
+      <FileText className="size-4" />
     </span>
   );
 }
@@ -329,7 +335,7 @@ function Progress({
 }) {
   return (
     <div
-      className={cn("mt-3 h-1.5 overflow-hidden rounded-full bg-muted", className)}
+      className={cn("mt-3 h-1 overflow-hidden rounded-full bg-muted", className)}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -338,9 +344,10 @@ function Progress({
       {indeterminate ? (
         <div className="progress-indeterminate h-full w-1/3 rounded-full bg-primary/60" />
       ) : (
+        // scaleX instead of width: transforms animate on the GPU without re-laying out the page
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-          style={{ width: `${Math.max(3, value * 100)}%` }}
+          className="h-full origin-left bg-primary transition-transform duration-500"
+          style={{ transform: `scaleX(${Math.max(0.03, value)})` }}
         />
       )}
     </div>
@@ -370,8 +377,8 @@ function IconAction({
       title={label}
       disabled={disabled}
       className={cn(
-        "grid size-9 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4",
-        emphasis ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "grid size-8 place-items-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4",
+        emphasis ? "text-foreground hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         danger && "hover:bg-destructive/10 hover:text-destructive",
       )}
     >

@@ -120,14 +120,13 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
       aria-label="Marky, the StudyMate robot"
       className={cn("overflow-visible", className)}
     >
-      {/* ground shadow, shrinks as Marky floats up */}
-      <ellipse cx="100" cy="221" rx="46" ry="7" className="bot-shadow fill-foreground/15" />
+      {/* ground shadow */}
+      <ellipse cx="100" cy="221" rx="40" ry="6" className="fill-foreground/10" />
 
-      <g className="bot-bob">
+      <g>
         {/* antenna with a highlighter-yellow bulb */}
         <line x1="100" y1="46" x2="100" y2="26" className="stroke-foreground" strokeWidth="4" strokeLinecap="round" />
-        <circle cx="100" cy="18" r="16" className="bot-glow fill-highlight/40" />
-        <circle cx="100" cy="18" r="9" className="fill-highlight stroke-foreground" strokeWidth="3" />
+        <circle cx="100" cy="18" r="9" className="fill-primary stroke-foreground" strokeWidth="3" />
 
         {/* ears */}
         <rect x="21" y="82" width="15" height="36" rx="7.5" className="fill-primary stroke-foreground" strokeWidth="4" />
@@ -135,14 +134,14 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
 
         {/* resting arms (drawn before the body so the shoulders tuck under it);
             hidden while that hand is up covering an eye */}
-        <g style={{ opacity: coverLeft ? 0 : 1, transition: "opacity 150ms" }}>
+        <g style={{ opacity: coverLeft ? 0 : 1, transition: "opacity 200ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
           <line x1="70" y1="174" x2="48" y2="196" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
           <line x1="70" y1="174" x2="48" y2="196" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
           <circle cx="47" cy="197" r="7" className="fill-card stroke-foreground" strokeWidth="3" />
         </g>
         <g
           className={cn("bot-arm", mood === "wave" && "bot-arm-wave")}
-          style={{ opacity: coverRight ? 0 : 1, transition: "opacity 150ms" }}
+          style={{ opacity: coverRight ? 0 : 1, transition: "opacity 200ms cubic-bezier(0.22, 1, 0.36, 1)" }}
         >
           <line x1="130" y1="174" x2="152" y2="196" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
           <line x1="130" y1="174" x2="152" y2="196" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
@@ -152,7 +151,7 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
         {/* body with a little highlighted page on the chest */}
         <rect x="64" y="154" width="72" height="54" rx="20" className="fill-primary stroke-foreground" strokeWidth="4" />
         <rect x="87" y="166" width="26" height="30" rx="4" className="fill-card" />
-        <rect x="90" y="175" width="20" height="6" rx="2" className="fill-highlight" />
+        <rect x="90" y="175" width="20" height="6" rx="2" className="fill-primary" />
         <line x1="92" y1="187" x2="106" y2="187" className="stroke-foreground/50" strokeWidth="2.5" strokeLinecap="round" />
 
         {/* head + screen */}
@@ -160,7 +159,7 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
         <rect x="48" y="61" width="104" height="78" rx="26" fill="var(--screen)" />
 
         {/* face: shifts slightly toward where Marky looks, like turning the head */}
-        <g ref={faceRef} style={{ transition: "transform 160ms ease-out" }}>
+        <g ref={faceRef} style={{ transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
           {eyesClosedHappy ? (
             <g fill="none" stroke="#ffffff" strokeWidth="5" strokeLinecap="round">
               <path d="M66 100 q12 -15 24 0" />
@@ -174,12 +173,12 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
                   transformBox: "fill-box",
                   transformOrigin: "center",
                   transform: blinking ? "scaleY(0.1)" : "scaleY(1)",
-                  transition: "transform 90ms ease-in-out",
+                  transition: "transform 120ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
               >
                 <circle cx={cx} cy={EYE_Y} r="15" fill="#ffffff" />
-                <g ref={(el) => { pupilRefs.current[i] = el; }} style={{ transition: "transform 140ms ease-out" }}>
-                  <circle cx={cx} cy={EYE_Y} r="8" fill="#171f4d" />
+                <g ref={(el) => { pupilRefs.current[i] = el; }} style={{ transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                  <circle cx={cx} cy={EYE_Y} r="8" fill="#18181b" />
                   <circle cx={cx - 3} cy={EYE_Y - 3} r="2.6" fill="#ffffff" />
                 </g>
               </g>
@@ -187,8 +186,8 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
           )}
 
           {/* cheeks */}
-          <ellipse cx="62" cy="121" rx="7" ry="4" fill="#ff8fb1" opacity="0.75" />
-          <ellipse cx="138" cy="121" rx="7" ry="4" fill="#ff8fb1" opacity="0.75" />
+          <ellipse cx="62" cy="121" rx="7" ry="4" fill="#ff8fb1" opacity="0.5" />
+          <ellipse cx="138" cy="121" rx="7" ry="4" fill="#ff8fb1" opacity="0.5" />
 
           {/* mouth changes with mood */}
           {mood === "confused" ? (
@@ -210,7 +209,7 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
               initial={{ y: 70, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 70, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 320, damping: 22 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
               <line x1="66" y1="170" x2="70" y2="112" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
               <line x1="66" y1="170" x2="70" y2="112" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />
@@ -225,7 +224,7 @@ export function Mascot({ mood = "idle", gaze = null, className }: Props) {
               initial={{ y: 70, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 70, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 320, damping: 22, delay: 0.05 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
             >
               <line x1="134" y1="170" x2="130" y2="112" strokeWidth="10" strokeLinecap="round" className="stroke-foreground" />
               <line x1="134" y1="170" x2="130" y2="112" strokeWidth="4" strokeLinecap="round" className="stroke-primary" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -9,6 +9,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import { FormField, PasswordField } from "@/components/auth/form-field";
 import { FormAlert } from "@/components/auth/form-alert";
+import { SignedInNotice } from "@/components/auth/signed-in-notice";
 import type { MascotMood } from "@/components/mascot";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -51,9 +52,9 @@ export function RegisterForm() {
   const [peeking, setPeeking] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
 
-  useEffect(() => {
-    if (status === "authenticated" && !succeeded) router.replace("/dashboard");
-  }, [status, succeeded, router]);
+  // Already logged in? Don't jump away: show who you are and offer
+  // "Open dashboard" or "Log out" (so you can switch or create an account).
+  const alreadyIn = status === "authenticated" && !succeeded;
 
   const strength = passwordStrength(password);
 
@@ -143,85 +144,89 @@ export function RegisterForm() {
       footer={
         <>
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-primary underline-offset-4 hover:underline">
+          <Link href="/login" className="body-5 text-primary underline-offset-4 hover:underline">
             Log in
           </Link>
         </>
       }
     >
-      <form onSubmit={onSubmit} noValidate className="grid gap-5">
-        {errors.form && <FormAlert>{errors.form}</FormAlert>}
+      {alreadyIn ? (
+        <SignedInNotice continueTo={"/dashboard"} />
+      ) : (
+        <form onSubmit={onSubmit} noValidate className="grid gap-4">
+          {errors.form && <FormAlert>{errors.form}</FormAlert>}
 
-        <FormField
-          id="name"
-          label="Name"
-          autoComplete="name"
-          placeholder="Your name"
-          value={name}
-          error={errors.name}
-          onChange={(e) => {
-            setName(e.target.value);
-            clearErrors();
-          }}
-          onFocus={() => setFocus("name")}
-          onBlur={() => setFocus(null)}
-        />
+          <FormField
+            id="name"
+            label="Name"
+            autoComplete="name"
+            placeholder="Your name"
+            value={name}
+            error={errors.name}
+            onChange={(e) => {
+              setName(e.target.value);
+              clearErrors();
+            }}
+            onFocus={() => setFocus("name")}
+            onBlur={() => setFocus(null)}
+          />
 
-        <FormField
-          id="email"
-          label="Email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
-          placeholder="you@example.com"
-          value={email}
-          error={errors.email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            clearErrors();
-          }}
-          onFocus={() => setFocus("email")}
-          onBlur={() => setFocus(null)}
-        />
+          <FormField
+            id="email"
+            label="Email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            value={email}
+            error={errors.email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearErrors();
+            }}
+            onFocus={() => setFocus("email")}
+            onBlur={() => setFocus(null)}
+          />
 
-        <PasswordField
-          id="password"
-          label="Password"
-          autoComplete="new-password"
-          value={password}
-          error={errors.password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            clearErrors();
-          }}
-          onFocus={() => setFocus("password")}
-          onBlur={() => setFocus(null)}
-          onVisibilityChange={setPeeking}
-        >
-          {password && !errors.password && (
-            <div aria-live="polite">
-              <div className="flex gap-1.5" aria-hidden="true">
-                {[1, 2, 3].map((level) => (
-                  <span
-                    key={level}
-                    className={cn(
-                      "h-1.5 flex-1 rounded-full bg-muted transition-colors duration-300",
-                      strength.score >= level &&
-                        (strength.score === 1 ? "bg-destructive" : strength.score === 2 ? "bg-highlight" : "bg-primary"),
-                    )}
-                  />
-                ))}
+          <PasswordField
+            id="password"
+            label="Password"
+            autoComplete="new-password"
+            value={password}
+            error={errors.password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearErrors();
+            }}
+            onFocus={() => setFocus("password")}
+            onBlur={() => setFocus(null)}
+            onVisibilityChange={setPeeking}
+          >
+            {password && !errors.password && (
+              <div aria-live="polite">
+                <div className="flex gap-1" aria-hidden="true">
+                  {[1, 2, 3].map((level) => (
+                    <span
+                      key={level}
+                      className={cn(
+                        "h-1 flex-1 rounded-full bg-muted transition-colors duration-300",
+                        strength.score >= level &&
+                          (strength.score === 1 ? "bg-destructive" : strength.score === 2 ? "bg-muted-foreground" : "bg-success"),
+                      )}
+                    />
+                  ))}
+                </div>
+                <p className="mt-2 caption-4 text-muted-foreground">{strength.label}</p>
               </div>
-              <p className="mt-1.5 text-xs font-medium text-muted-foreground">{strength.label}</p>
-            </div>
-          )}
-        </PasswordField>
+            )}
+          </PasswordField>
 
-        <Button type="submit" size="lg" className="mt-1 w-full" disabled={submitting || succeeded}>
-          {submitting || succeeded ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-          {succeeded ? "Account created" : submitting ? "Creating account" : "Create account"}
-        </Button>
-      </form>
+          <Button type="submit" size="lg" className="w-full" disabled={submitting || succeeded}>
+            {submitting || succeeded ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+            {succeeded ? "Account created" : submitting ? "Creating account" : "Create account"}
+          </Button>
+        </form>
+      )}
     </AuthShell>
   );
 }
