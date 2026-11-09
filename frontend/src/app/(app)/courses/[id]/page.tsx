@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, RotateCw } from "lucide-react";
+import { ArrowLeft, MessageCircleQuestion, RotateCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { MaterialRow, UploadRow, type UploadItem } from "@/components/materials/material-row";
@@ -267,21 +267,36 @@ export default function CoursePage() {
         >
           <ArrowLeft className="size-4" aria-hidden="true" /> Courses
         </Link>
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          {course?.code && (
-            <span className="rounded-sm border border-primary/30 bg-primary/8 px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-primary uppercase">
-              {course.code}
-            </span>
-          )}
-          <h1 className="mt-2 text-4xl font-extrabold tracking-[-0.03em] break-words sm:text-5xl">{course?.name}</h1>
-          {course?.description && (
-            <p className="mt-2 max-w-2xl font-serif text-lg text-muted-foreground">{course.description}</p>
-          )}
-          {!empty && (
-            <p className="mt-3 text-sm font-semibold text-muted-foreground">
-              {stats.files} {stats.files === 1 ? "file" : "files"} · {stats.pages} pages read · {stats.passages}{" "}
-              searchable passages
-            </p>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4"
+        >
+          <div className="min-w-0">
+            {course?.code && (
+              <span className="rounded-sm border border-primary/30 bg-primary/8 px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-primary uppercase">
+                {course.code}
+              </span>
+            )}
+            <h1 className="mt-2 text-4xl font-extrabold tracking-[-0.03em] break-words sm:text-5xl">{course?.name}</h1>
+            {course?.description && (
+              <p className="mt-2 max-w-2xl font-serif text-lg text-muted-foreground">{course.description}</p>
+            )}
+            {!empty && (
+              <p className="mt-3 text-sm font-semibold text-muted-foreground">
+                {stats.files} {stats.files === 1 ? "file" : "files"} · {stats.pages} pages read · {stats.passages}{" "}
+                searchable passages
+              </p>
+            )}
+          </div>
+          {/* From your notes straight into a chat about them (Stage 7) */}
+          {stats.passages > 0 && (
+            <Button asChild size="lg" className="shadow-[0_8px_24px_-12px_var(--ballpoint)]">
+              <Link href={`/chat?course=${id}`}>
+                <MessageCircleQuestion aria-hidden="true" /> Ask about {course?.name ?? "this course"}
+              </Link>
+            </Button>
           )}
         </motion.div>
       </header>

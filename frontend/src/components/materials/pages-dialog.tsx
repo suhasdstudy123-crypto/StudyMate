@@ -38,12 +38,24 @@ type Props = {
   initialPage?: number;
   /** Mark this passage and scroll to it (the search result that was clicked) */
   focusChunkId?: string | null;
+  /** Why it is marked: "search" (blue outline) or "cited" by a chat answer
+      (highlighter yellow: the app's colour for text an answer relies on) */
+  focusKind?: FocusKind;
   // Tells the course page when this file changed here (failed pages retried),
   // so the file row updates at once instead of on the next page load.
   onChanged: (m: Material) => void;
 };
 
-export function PagesDialog({ material, onClose, onChanged, initialPage = 1, focusChunkId = null }: Props) {
+export type FocusKind = "search" | "cited";
+
+export function PagesDialog({
+  material,
+  onClose,
+  onChanged,
+  initialPage = 1,
+  focusChunkId = null,
+  focusKind = "search",
+}: Props) {
   return (
     <Dialog
       open={material !== null}
@@ -60,6 +72,7 @@ export function PagesDialog({ material, onClose, onChanged, initialPage = 1, foc
           onChanged={onChanged}
           initialPage={initialPage}
           focusChunkId={focusChunkId}
+          focusKind={focusKind}
         />
       )}
     </Dialog>
@@ -71,11 +84,13 @@ function Viewer({
   onChanged,
   initialPage,
   focusChunkId,
+  focusKind,
 }: {
   material: Material;
   onChanged: (m: Material) => void;
   initialPage: number;
   focusChunkId: string | null;
+  focusKind: FocusKind;
 }) {
   const [pages, setPages] = useState<PageSummary[] | null>(null);
   const [current, setCurrent] = useState(initialPage);
@@ -167,6 +182,7 @@ function Viewer({
             materialId={material.id}
             detail={detail}
             focusChunkId={focusChunkId}
+            focusKind={focusKind}
             onRetry={async () => {
               const updated = await retryFailedPages(material.id);
               onChanged(updated);
@@ -199,11 +215,13 @@ function PageView({
   materialId,
   detail,
   focusChunkId,
+  focusKind,
   onRetry,
 }: {
   materialId: string;
   detail: PageDetail;
   focusChunkId: string | null;
+  focusKind: FocusKind;
   onRetry: () => Promise<void>;
 }) {
   const { page, chunks } = detail;
@@ -243,6 +261,7 @@ function PageView({
             position={i + 1}
             total={chunks.length}
             focused={chunk.id === focusChunkId}
+            cited={chunk.id === focusChunkId && focusKind === "cited"}
             layoutKey={pictureLoaded}
           />
         ))
@@ -384,12 +403,15 @@ function ChunkCard({
   position,
   total,
   focused = false,
+  cited = false,
   layoutKey,
 }: {
   chunk: Chunk;
   position: number;
   total: number;
   focused?: boolean;
+  /** cited by a chat answer: the text gets the highlighter */
+  cited?: boolean;
   /** changes when something above moved this card (the picture loaded) */
   layoutKey?: unknown;
 }) {
@@ -403,16 +425,25 @@ function ChunkCard({
   return (
     <article
       ref={ref}
-      className={cn("rounded-md border bg-background", focused && "border-primary ring-2 ring-primary/25")}
+      className={cn(
+        "rounded-md border bg-background",
+        focused && !cited && "border-primary ring-2 ring-primary/25",
+        cited && "border-highlight ring-2 ring-highlight/60",
+      )}
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">
         {chunk.chunk_type === "table" && <Table2 className="size-3.5" aria-hidden="true" />}
         {chunk.chunk_type === "diagram" && <Workflow className="size-3.5" aria-hidden="true" />}
         Passage {position} of {total}
         {chunk.chunk_type !== "text" && ` · ${chunk.chunk_type}`}
-        {focused && (
+        {focused && !cited && (
           <span className="inline-flex items-center rounded-sm bg-primary px-1.5 py-px text-primary-foreground">
             From your search
+          </span>
+        )}
+        {cited && (
+          <span className="inline-flex items-center rounded-sm bg-highlight px-1.5 py-px text-highlight-foreground">
+            Cited in the answer
           </span>
         )}
         {chunk.source === "vision" && (
@@ -440,7 +471,7 @@ function ChunkCard({
               // Image-reader text keeps its line breaks (diagram lists, formulas
               // on their own line); text from the PDF flows as paragraphs.
               <p key={i} className={cn(chunk.source === "vision" && "whitespace-pre-line")}>
-                {block.text}
+                {cited ? <span className="highlight highlight-sweep">{block.text}</span> : block.text}
               </p>
             ),
           )}

@@ -280,6 +280,101 @@
   100% { transform: translateX(300%); }
 }
 
+/* ---------- Chat (Stage 7) ---------- */
+
+/*
+  Answers are Markdown turned into HTML (react-markdown). Tailwind removes
+  all default styles, so lists, tables and code need their look back here.
+  The answer is the app speaking, so it uses the sans font; passages quoted
+  from your notes (sources panel, page viewer) stay in the serif.
+*/
+.answer-prose {
+  font-size: 0.96rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.answer-prose > * + * { margin-top: 0.75em; }
+.answer-prose h1, .answer-prose h2, .answer-prose h3, .answer-prose h4 {
+  font-weight: 800;
+  line-height: 1.3;
+  margin-top: 1.1em;
+}
+.answer-prose h1 { font-size: 1.2em; }
+.answer-prose h2 { font-size: 1.1em; }
+.answer-prose h3, .answer-prose h4 { font-size: 1em; }
+.answer-prose ul, .answer-prose ol { padding-left: 1.4em; }
+.answer-prose ul { list-style: disc; }
+.answer-prose ol { list-style: decimal; }
+.answer-prose li + li { margin-top: 0.3em; }
+.answer-prose li::marker { color: var(--ballpoint); }
+.answer-prose strong { font-weight: 700; }
+.answer-prose blockquote {
+  border-left: 3px solid var(--rule);
+  padding-left: 0.9em;
+  color: var(--ink-soft);
+}
+.answer-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--tint);
+  border-radius: 0.3em;
+  padding: 0.1em 0.35em;
+}
+.answer-prose pre {
+  overflow-x: auto;
+  background: var(--tint);
+  border-radius: var(--radius-md);
+  padding: 0.75em 0.9em;
+  line-height: 1.45;
+}
+.answer-prose pre code { background: none; padding: 0; font-size: 0.82rem; }
+.answer-prose table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+/* Table cells break only between words; a wide table scrolls sideways instead */
+.answer-prose table { overflow-wrap: normal; }
+.answer-prose th { white-space: nowrap; }
+.answer-prose th, .answer-prose td {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.45em 0.75em;
+  text-align: left;
+  vertical-align: top;
+}
+.answer-prose th { background: var(--tint); font-weight: 700; }
+.answer-prose tr:last-child td { border-bottom: 0; }
+.answer-prose hr { border-color: var(--rule); }
+/* Display formulas ($$...$$) scroll sideways on a phone instead of overflowing */
+.answer-prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+
+/* A blinking ink caret after the last word while the answer is being written */
+.streaming-answer .answer-prose > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 0.15em;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: var(--ballpoint);
+  animation: caret 1s steps(1) infinite;
+}
+
+/* "Searching your notes..." with three dots appearing one after another */
+.thinking-dots::after {
+  content: "";
+  animation: thinking-dots 1.2s steps(4) infinite;
+}
+@keyframes thinking-dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75%, 100% { content: "..."; }
+}
+
+/* A citation chip pops in as the answer streams past it */
+.cite-chip { animation: cite-pop 260ms cubic-bezier(0.2, 0.8, 0.2, 1.4); }
+@keyframes cite-pop {
+  from { transform: translateY(-1px) scale(0.4); opacity: 0; }
+}
+
 /* Respect "reduce motion": nothing moves on its own */
 @media (prefers-reduced-motion: reduce) {
   .highlight-sweep,
@@ -291,7 +386,10 @@
   .caret,
   .dialog-pop[open],
   .dialog-pop[open]::backdrop,
-  .progress-indeterminate {
+  .progress-indeterminate,
+  .streaming-answer .answer-prose > :last-child::after,
+  .thinking-dots::after,
+  .cite-chip {
     animation: none;
   }
 }
