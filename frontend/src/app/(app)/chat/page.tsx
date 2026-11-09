@@ -632,6 +632,36 @@ function ChatScreen() {
   );
 }
 
+/* "1 question", "3 questions". A chat holds question + answer pairs; a
+   question whose answer was stopped before any text has no answer row. */
+function questionCount(messages: number) {
+  const n = Math.ceil(messages / 2);
+  return `${n} ${n === 1 ? "question" : "questions"}`;
+}
+
+/* Chats under Today / Yesterday / Last 7 days / Earlier (by last activity,
+   your own clock). The list is already newest first, so groups stay in order. */
+function groupByDay(sessions: ChatSession[]): [string, ChatSession[]][] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const day = 24 * 60 * 60 * 1000;
+  const labelFor = (iso: string) => {
+    const t = new Date(iso).getTime();
+    if (t >= startOfToday.getTime()) return "Today";
+    if (t >= startOfToday.getTime() - day) return "Yesterday";
+    if (t >= startOfToday.getTime() - 6 * day) return "Last 7 days";
+    return "Earlier";
+  };
+  const groups: [string, ChatSession[]][] = [];
+  for (const s of sessions) {
+    const label = labelFor(s.updated_at);
+    const last = groups.at(-1);
+    if (last && last[0] === label) last[1].push(s);
+    else groups.push([label, [s]]);
+  }
+  return groups;
+}
+
 function ChatList({
   sessions,
   activeId,
@@ -653,34 +683,41 @@ function ChatList({
       {sessions.length === 0 ? (
         <p className="px-1 py-2 body-6 text-muted-foreground">No chats in this course yet.</p>
       ) : (
-        <ul className="grid gap-0.5">
-          {sessions.map((s) => (
-            <li key={s.id} className="group relative">
-              <button
-                type="button"
-                onClick={() => onOpen(s)}
-                aria-current={s.id === activeId ? "page" : undefined}
-                className={cn(
-                  "w-full rounded-lg py-2 pl-3 pr-10 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                  s.id === activeId ? "bg-muted" : "hover:bg-muted/60",
-                )}
-              >
-                <span className="block truncate title-4">{s.title ?? "New chat"}</span>
-                <span className="block caption-5 text-muted-foreground">
-                  {timeAgo(s.updated_at)} · {Math.floor(s.message_count / 2)} {s.message_count === 2 ? "question" : "questions"}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(s)}
-                aria-label={`Delete chat: ${s.title ?? "New chat"}`}
-                className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-60 outline-none transition-[opacity,color,background-color] hover:bg-background hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-              </button>
-            </li>
+        <div className="grid gap-4">
+          {groupByDay(sessions).map(([label, group]) => (
+            <section key={label} aria-label={label}>
+              <h3 className="px-3 pb-1 caption-4 text-muted-foreground">{label}</h3>
+              <ul className="grid gap-0.5">
+                {group.map((s) => (
+                  <li key={s.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(s)}
+                      aria-current={s.id === activeId ? "page" : undefined}
+                      className={cn(
+                        "w-full rounded-lg py-2 pl-3 pr-10 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                        s.id === activeId ? "bg-muted" : "hover:bg-muted/60",
+                      )}
+                    >
+                      <span className="block truncate title-4">{s.title ?? "New chat"}</span>
+                      <span className="block caption-5 text-muted-foreground">
+                        {timeAgo(s.updated_at)} · {questionCount(s.message_count)}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(s)}
+                      aria-label={`Delete chat: ${s.title ?? "New chat"}`}
+                      className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-60 outline-none transition-[opacity,color,background-color] hover:bg-background hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                    >
+                      <Trash2 className="size-3.5" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

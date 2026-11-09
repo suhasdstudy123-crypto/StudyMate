@@ -26,5 +26,5 @@ export function proxy(request: NextRequest) {
 
 // Only run on the logged-in part of the site
 export const config = {
-  matcher: ["/dashboard/:path*", "/courses/:path*", "/materials/:path*", "/chat/:path*"],
+  matcher: ["/dashboard/:path*", "/courses/:path*", "/materials/:path*", "/chat/:path*", "/admin/:path*"],
 };

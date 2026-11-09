@@ -31,6 +31,7 @@
   --highlighter: #ffe14d;      /* cited text only */
   --highlighter-ink: #18181b;  /* text sitting on the highlighter */
   --screen: #26272b;           /* Marky's face screen */
+  --chart: #2b59c3;            /* chart bars (admin): the action blue, checked for contrast */
 }
 
 /* Dark surfaces use the design system's fixed greys: #181818 page,
@@ -49,6 +50,9 @@
   --highlighter: #ffe14d;
   --highlighter-ink: #181818;
   --screen: #000000;
+  /* Darker than --ballpoint: #8ab0ff is too light for a filled bar on #1f1f1f
+     (fails the chart lightness check); #6690ea passes and keeps the hue. */
+  --chart: #6690ea;
 }
 
 /*
@@ -73,6 +77,7 @@
   --color-success: var(--success);
   --color-highlight: var(--highlighter);
   --color-highlight-foreground: var(--highlighter-ink);
+  --color-chart: var(--chart);
 
   /* ONE typeface for the app. The serif is used for a single job:
      text quoted from YOUR documents, so "your notes" never look like

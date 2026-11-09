@@ -36,7 +36,11 @@ export function AppHeader() {
     .slice(0, 2)
     .toUpperCase();
 
-  const navLinks = NAV.map((item) => {
+  // The Admin link is only SHOWN to admins. Hiding it is not the protection:
+  // every /admin request is checked by the backend (403 for students).
+  const nav = user?.role === "admin" ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
+
+  const navLinks = nav.map((item) => {
     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
