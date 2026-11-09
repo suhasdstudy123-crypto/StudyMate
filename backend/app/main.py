@@ -6,8 +6,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.app.config import UPLOAD_DIR
-from backend.app.database import get_db
+from backend.app.database import SessionLocal, get_db
 from backend.app.processing import embed_worker, vision_worker, worker
+from backend.app.routers.admin import EMPTY_CHAT_MIN_AGE
 from backend.app.routers.admin import router as admin_router
 from backend.app.routers.auth import router as auth_router
 from backend.app.routers.chat import router as chat_router
@@ -25,6 +26,21 @@ _log.addHandler(_handler)
 _log.propagate = False
 
 
+def cleanup_empty_chats_on_start() -> int:
+    # Never stop the server from starting because of a cleanup (e.g. migration
+    # 007 not run yet): log it and carry on.
+    try:
+        with SessionLocal() as db:
+            removed = db.execute(
+                text("SELECT delete_empty_chat_sessions(CAST(:age AS interval))"), {"age": EMPTY_CHAT_MIN_AGE}
+            ).scalar_one()
+            db.commit()
+            return removed
+    except Exception:
+        _log.exception("Empty-chat cleanup failed (is migration 007 applied?)")
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- runs once when the server STARTS --------------------------------
@@ -37,6 +53,12 @@ async def lifespan(app: FastAPI):
     requeued = worker.requeue_unfinished()
     if requeued:
         _log.info("Re-queued %d unfinished file(s)", requeued)
+    # Chats whose first question never got saved (Stage 8). Once per start is
+    # enough: they are rare and already hidden from the chat list. The admin
+    # page has a button for the same cleanup.
+    removed = cleanup_empty_chats_on_start()
+    if removed:
+        _log.info("Removed %d empty chat(s)", removed)
     # The image reader (Stage 5b): one thread reading picture pages via Gemini.
     vision_worker.start()
     # The embedding worker (Stage 6): loads the model in the background,
@@ -54,7 +76,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="StudyMate API",
     description="Backend API for StudyMate: upload study material, ask questions, get answers from your own notes.",
-    version="0.7.0",
+    version="0.8.0",
     lifespan=lifespan,
 )
 

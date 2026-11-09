@@ -11,7 +11,7 @@ Pydantic validates incoming JSON automatically: a request that breaks
 these rules gets a 422 error before our route code even runs.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -308,3 +308,91 @@ class ChatStatus(BaseModel):
 class ChatSuggestions(BaseModel):
     # GET /chat/suggestions: specific starter questions from the course's headings
     suggestions: list[str]
+
+
+# ------------------------------------------------------------------
+# Admin dashboard (Stage 8)
+# Privacy rule: these shapes hold ONLY account metadata, counts, statuses,
+# model names, tokens and timestamps. There is deliberately no field for a
+# chat title, course name, file title, question, answer or passage, so even
+# if a query returned one, FastAPI would drop it from the response.
+# extra="ignore" (Pydantic's default) is what drops unknown keys.
+# ------------------------------------------------------------------
+
+class AdminOverview(BaseModel):
+    users_total: int
+    students: int
+    admins: int
+    inactive_users: int
+    files_total: int
+    files_ready: int
+    files_processing: int
+    files_pending: int
+    files_failed: int
+    files_smart: int
+    files_thorough: int
+    avg_processing_seconds: float | None     # NULL until a file is processed after migration 007
+    median_processing_seconds: float | None
+    avg_seconds_per_page: float | None
+    files_timed: int
+    pages_total: int
+    pages_needing_pictures: int
+    pages_read_from_pictures: int
+    pages_picture_failed: int
+    pages_picture_waiting: int
+    passages_total: int
+    passages_embedded: int
+    passages_from_pictures: int
+    chats_total: int
+    chats_empty: int
+    questions_total: int
+
+
+class AdminUser(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    role: Literal["student", "admin"]
+    is_active: bool
+    joined_at: datetime
+    course_count: int
+    file_count: int
+    pages_total: int
+    chat_count: int
+    question_count: int
+    not_in_notes_count: int
+    last_question_at: datetime | None
+
+
+class AdminUserUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminChatDay(BaseModel):
+    day: date
+    questions: int
+    answered: int
+    not_in_notes: int
+    stopped: int
+    active_users: int
+    prompt_tokens: int
+    output_tokens: int
+
+
+class AdminModelUsage(BaseModel):
+    model: str
+    pages_read: int
+    answers: int
+    not_in_notes: int
+    prompt_tokens: int
+    output_tokens: int
+    avg_output_tokens: float | None
+
+
+class AdminChatStats(BaseModel):
+    days: list[AdminChatDay]          # oldest first, every day of the window (0 when quiet)
+    models: list[AdminModelUsage]     # all time
+
+
+class AdminCleanupResult(BaseModel):
+    deleted: int
