@@ -29,6 +29,8 @@ presses Stop, the part already shown is saved with status "stopped".
 import asyncio
 import json
 import logging
+import random
+import re
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -63,6 +65,7 @@ from backend.app.schemas import (
     ChatSessionSummary,
     ChatSource,
     ChatStatus,
+    ChatSuggestions,
 )
 
 log = logging.getLogger("studymate.chat")
@@ -100,18 +103,88 @@ def _utc(ts: float | None) -> datetime | None:
 @router.get("/status", response_model=ChatStatus)
 def chat_status(current_user: User = Depends(get_current_user)):
     if not GEMINI_API_KEY:
-        return ChatStatus(status="off", model=None, available_at=None,
+        return ChatStatus(status="off", model=None, main_model=CHAT_MODEL, available_at=None,
                           message="The chat is switched off: no Gemini API key is set on the server.")
     for limiter in answer_limiters:
         if limiter.used_up_until() is None:
-            return ChatStatus(status="ok", model=limiter.model, message=None, available_at=None)
+            return ChatStatus(status="ok", model=limiter.model, main_model=CHAT_MODEL, message=None, available_at=None)
     until = min(l.used_up_until() or 0 for l in answer_limiters)
     busy = any(l.resting() for l in answer_limiters)
     return ChatStatus(
-        status="paused", model=None, available_at=_utc(until),
+        status="paused", model=None, main_model=CHAT_MODEL, available_at=_utc(until),
         message="Google's chat models are overloaded right now." if busy
         else "Today's free limit for answers is used up.",
     )
+
+
+# ------------------------------------------------------------------
+# Suggested questions, built from the course's own headings
+# ------------------------------------------------------------------
+# Generic starters ("Summarise my notes") invite questions RAG answers badly:
+# the search returns the top 8 passages, so a "summary" covers only those.
+# Specific questions are what RAG is good at, so the suggestions name real
+# topics from YOUR notes: the heading line every passage starts with.
+
+HEADINGS_SQL = text("""
+    SELECT split_part(dc.content, E'\n', 1) AS heading, dc.chunk_type, dc.source
+    FROM document_chunks dc
+    JOIN materials m ON m.id = dc.material_id
+    WHERE m.course_id = :course_id AND m.status = 'ready'
+    ORDER BY m.created_at, dc.page_number, dc.chunk_index
+""")
+
+# Slide titles that are not topics
+NOT_TOPICS = {
+    "outline", "agenda", "contents", "table of contents", "summary", "references", "questions",
+    "thank you", "thanks", "any questions", "introduction", "overview", "recap", "review",
+}
+SUGGESTIONS = 4
+
+
+def _topic(heading: str) -> str | None:
+    """A heading line -> a clean topic name, or None if it isn't one."""
+    if re.match(r"\s*(screenshot|image|photo|picture|logo)\b", heading, flags=re.I):
+        return None                                   # a picture's label, not a topic
+    h = re.sub(r"^(diagram|table|figure|chart)\s*:\s*", "", heading.strip(), flags=re.I)
+    h = re.sub(r"^[•\-\u2022\u2023\u25aa\u27a2\u2756*#\s]+", "", h)        # bullets, markdown #
+    h = re.sub(r"\s*\(\d+\s*/\s*\d+\)\s*$", "", h).strip(" :.-–—")      # "(1/2)" continuations
+    words = h.split()
+    if not (2 <= len(h) <= 60) or len(words) > 8 or h.endswith("?"):
+        return None
+    if not re.search(r"[A-Za-z]{3}", h) or h.lower() in NOT_TOPICS:
+        return None
+    # "Transaction Concept A transaction is delimited": the heading ran into
+    # its first sentence (PDF text). A verb like "is" means it's a sentence.
+    if re.search(r"\b(is|are|was|were|means|has|have|can|will|should|must)\b", h, flags=re.I):
+        return None
+    return h
+
+
+@router.get("/suggestions", response_model=ChatSuggestions)
+def suggestions(course_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    get_owned_course_or_404(db, course_id, current_user)
+    topics: list[tuple[str, str]] = []          # (topic, chunk_type), in deck order
+    seen: set[str] = set()
+    for row in db.execute(HEADINGS_SQL, {"course_id": course_id}).mappings():
+        topic = _topic(row["heading"])
+        if topic and topic.lower() not in seen:
+            seen.add(topic.lower())
+            topics.append((topic, row["chunk_type"]))
+    if not topics:
+        return ChatSuggestions(suggestions=[])
+    # Spread over the whole course (start, middle, end), with a little
+    # randomness so the page doesn't always show the same four.
+    picked: list[tuple[str, str]] = []
+    buckets = min(SUGGESTIONS, len(topics))
+    size = len(topics) / buckets
+    for b in range(buckets):
+        picked.append(random.choice(topics[int(b * size): max(int((b + 1) * size), int(b * size) + 1)]))
+    return ChatSuggestions(suggestions=[
+        f"Walk me through the {t} diagram" if kind == "diagram"
+        else f"Walk me through the {t[0].lower() + t[1:]}" if t.lower().startswith("example")
+        else f"Explain {t}"
+        for t, kind in picked
+    ])
 
 
 # ------------------------------------------------------------------
@@ -128,6 +201,10 @@ SESSIONS_SQL = text("""
     WHERE s.user_id = :me
       AND (CAST(:course_id AS uuid) IS NULL OR s.course_id = CAST(:course_id AS uuid))
       AND (CAST(:session_id AS uuid) IS NULL OR s.id = CAST(:session_id AS uuid))
+      -- The list hides chats with no messages (a first question that failed
+      -- leaves an empty chat behind); asking for one by id still finds it.
+      AND (CAST(:session_id AS uuid) IS NOT NULL
+           OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id))
     ORDER BY s.updated_at DESC                      -- uses idx_chat_sessions_user_recent
     LIMIT :limit
 """)
@@ -317,6 +394,10 @@ async def answer_events(user: User, course_id: UUID, session_id: UUID, set_title
         # Keep what they already saw. shield=True: this save must finish even
         # though the request is being cancelled around it.
         partial = "".join(shown).strip()
+        if not partial and not done:
+            # A dropped connection is otherwise completely silent in the log
+            # (that's how the 30-second proxy cut-off hid at first).
+            log.info("The browser left before the answer started (Stop, closed tab or lost connection); nothing saved")
         if partial and not done:
             stopped = rag.Finished(text=partial, status="stopped", model=model,
                                    cited=rag.cited_numbers(partial, len(passages)))
@@ -343,6 +424,56 @@ async def answer_events(user: User, course_id: UUID, session_id: UUID, set_title
         yield _error("failed", "Something went wrong while answering. Please ask again.")
 
 
+# ------------------------------------------------------------------
+# Keep-alive: the connection must not go silent
+# ------------------------------------------------------------------
+# After the sources are sent, nothing flows until Gemini's first word, and
+# Gemini can think (or hang) for 30+ s. Proxies close connections that stay
+# silent too long: the Next.js /api proxy after 30 s (it cut answers off with
+# "Something went wrong" and NO error in the backend log), nginx after 60 s by
+# default. So whenever nothing has been sent for a few seconds, we send an SSE
+# COMMENT: a line starting with ":" that every SSE reader ignores, but which
+# the proxy counts as traffic.
+
+KEEP_ALIVE_SECONDS = 10
+KEEP_ALIVE = ": still working\n\n"
+
+
+async def with_keep_alive(events, every: float = KEEP_ALIVE_SECONDS):
+    """Pass on every event from `events`; if none comes within `every`
+    seconds, send a keep-alive comment and keep waiting for the same event."""
+    iterator = events.__aiter__()
+    # The next event is fetched in its own task, so we can wait for it WITH a
+    # timeout without cancelling it (a cancelled fetch would end the stream).
+    pending = asyncio.ensure_future(iterator.__anext__())
+    try:
+        while True:
+            finished, _ = await asyncio.wait({pending}, timeout=every)
+            if not finished:
+                yield KEEP_ALIVE
+                continue
+            try:
+                event = pending.result()
+            except StopAsyncIteration:
+                return
+            yield event
+            pending = asyncio.ensure_future(iterator.__anext__())
+    finally:
+        # The browser left (Stop / closed tab): stop the answer too. Cancelling
+        # its task raises CancelledError inside answer_events, which saves the
+        # part already shown. Wait for that (shielded: we're being cancelled).
+        if not pending.done():
+            pending.cancel()
+            with anyio.CancelScope(shield=True):
+                try:
+                    await pending
+                except BaseException:
+                    pass
+        else:
+            with anyio.CancelScope(shield=True):
+                await iterator.aclose()
+
+
 SSE_HEADERS = {
     "Cache-Control": "no-cache, no-transform",  # no proxy may store or compress-and-hold it
     "X-Accel-Buffering": "no",                  # nginx (deployment): pass each event on at once
@@ -362,7 +493,9 @@ async def ask(session_id: UUID, body: ChatQuestion, db: Session = Depends(get_db
                             "The chat is switched off: no Gemini API key is set on the server.")
     history = await run_in_threadpool(load_history, db, session_id)
     return StreamingResponse(
-        answer_events(current_user, session.course_id, session_id, session.title is None, body.question, history),
+        with_keep_alive(
+            answer_events(current_user, session.course_id, session_id, session.title is None, body.question, history)
+        ),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )

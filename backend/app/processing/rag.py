@@ -18,6 +18,7 @@ does the search and saves the result. That also makes it testable with a fake
 Gemini.
 """
 
+import asyncio
 import logging
 import re
 from collections.abc import AsyncIterator, Sequence
@@ -166,6 +167,13 @@ def cited_numbers(text: str, passage_count: int) -> list[int]:
 # ------------------------------------------------------------------
 
 ANSWER_TIMEOUT_MS = 90_000   # the whole request; a normal answer takes 3-15 s
+# If a model hasn't sent its first word after this long and another model is
+# available, give up on it: the student is watching an empty answer.
+FIRST_WORD_SECONDS = 25
+# Google said "overloaded" (503): skip that model for a while, so the next
+# questions go straight to the fallback instead of failing first (3.8 Flash
+# answered 503 to every question one morning, wasting time on each).
+BUSY_REST_SECONDS = 300
 MAX_ANSWER_TOKENS = 4096     # a long answer with a table is ~1,000
 
 NO_PASSAGES_TEXT = (
@@ -251,7 +259,7 @@ def _note_failure(limiter: ModelLimiter, err: Exception) -> None:
         else:
             limiter.slow_down(err.retry_after)
     elif isinstance(err, ServerBusy):
-        limiter.slow_down(60)
+        limiter.rest(BUSY_REST_SECONDS)
 
 
 def _unavailable(limiters: Sequence[ModelLimiter], last_error: Exception | None) -> ChatUnavailable:
@@ -296,9 +304,13 @@ async def stream_answer(
     )
     last_error: Exception | None = None
 
-    for limiter in limiters:
+    for i, limiter in enumerate(limiters):
         if not limiter.try_acquire():      # checked AND counted, under the lock
             continue
+        # Waiting for the first word is limited only if another model could
+        # still take over; the last model gets the full request timeout.
+        has_backup = any(l.used_up_until() is None for l in limiters[i + 1:])
+        first_word_limit = FIRST_WORD_SECONDS if has_backup else None
         log.info("Answering with %s (request %d of %d today)", limiter.model, limiter.requests_today, limiter.per_day)
         marker = _MarkerCheck()
         full: list[str] = []
@@ -306,10 +318,30 @@ async def stream_answer(
         usage = None
         finish = ""
         try:
-            stream = await client.aio.models.generate_content_stream(
-                model=limiter.model, contents=contents, config=config
+            # ONE deadline for "request sent + first piece back" (wait_for
+            # cancels the wait when it runs out: fine, nothing was shown yet).
+            deadline = None if first_word_limit is None else asyncio.get_running_loop().time() + first_word_limit
+
+            def left() -> float | None:
+                return None if deadline is None else max(0.0, deadline - asyncio.get_running_loop().time())
+
+            stream = await asyncio.wait_for(
+                client.aio.models.generate_content_stream(model=limiter.model, contents=contents, config=config),
+                left(),
             )
-            async for chunk in stream:
+            chunks = stream.__aiter__()
+            try:
+                first = await asyncio.wait_for(chunks.__anext__(), left())
+            except StopAsyncIteration:
+                first = None
+
+            async def all_chunks():
+                if first is not None:
+                    yield first
+                    async for more in chunks:
+                        yield more
+
+            async for chunk in all_chunks():
                 if chunk.usage_metadata is not None:
                     usage = chunk.usage_metadata
                 if chunk.candidates and chunk.candidates[0].finish_reason:

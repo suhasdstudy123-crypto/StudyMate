@@ -80,6 +80,8 @@ def translate(err: Exception, timeout_s: float) -> Exception:
         return ServerBusy(f"Gemini's servers are busy ({err.code})")
     if isinstance(err, httpx.TimeoutException):
         return ServerBusy(f"Gemini didn't answer within {timeout_s:.0f} s")
+    if isinstance(err, TimeoutError):  # our own asyncio.wait_for limit (chat: first word)
+        return ServerBusy("Gemini didn't start answering in time")
     if isinstance(err, httpx.TransportError):  # no internet, Wi-Fi dropped, DNS failed
         return ServerBusy(f"Couldn't reach Gemini ({type(err).__name__})")
     return GeminiError(f"Unexpected problem talking to Gemini ({type(err).__name__})")

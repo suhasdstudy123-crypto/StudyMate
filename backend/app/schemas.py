@@ -300,5 +300,11 @@ class ChatStatus(BaseModel):
     # GET /chat/status: can the chat answer right now, and with which model?
     status: Literal["ok", "paused", "off"]
     model: str | None               # the model the next answer will most likely use
+    main_model: str                 # CHAT_MODEL: when model differs, the fallback is answering
     message: str | None
     available_at: datetime | None   # paused: when answers work again (UTC)
+
+
+class ChatSuggestions(BaseModel):
+    # GET /chat/suggestions: specific starter questions from the course's headings
+    suggestions: list[str]
